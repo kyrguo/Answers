@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OceanBase Bacchus：云原生共享存储架构深度解读</title>
+<style>
+:root{--ink:#172033;--muted:#637083;--line:#dce3ec;--bg:#f4f7fb;--card:#fff;--blue:#2457a7;--blue2:#eaf1fc;--green:#147d61;--green2:#e8f5ef;--amber:#a56512;--amber2:#fff4df;--red:#a33b3b}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.78 "Segoe UI","Microsoft YaHei",Arial,sans-serif}
+.hero{background:linear-gradient(135deg,#10243e,#1d4777 65%,#286b83);color:white;padding:64px max(24px,calc((100% - 1120px)/2)) 52px}
+.hero .eyebrow{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#b9d4f5}
+h1{font-size:clamp(30px,5vw,48px);line-height:1.2;margin:14px 0 18px;max-width:900px}
+.hero p{max-width:900px;color:#d9e7f7;font-size:18px;margin:0}
+.tags{display:flex;gap:9px;flex-wrap:wrap;margin-top:24px}.tag{border:1px solid #ffffff55;border-radius:20px;padding:4px 11px;font-size:12px;color:#eaf3ff}
+.layout{max-width:1180px;margin:32px auto;padding:0 22px;display:grid;grid-template-columns:250px minmax(0,1fr);gap:28px}
+nav{position:sticky;top:18px;align-self:start;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;max-height:calc(100vh - 36px);overflow:auto}
+nav strong{display:block;margin-bottom:10px}nav a{display:block;color:#526176;text-decoration:none;font-size:13px;padding:5px 7px;border-radius:6px}nav a:hover{background:var(--blue2);color:var(--blue)}
+main{min-width:0}.intro,.section,.conclusion{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px 32px;margin-bottom:20px;box-shadow:0 5px 18px #1d35570a}
+h2{font-size:25px;line-height:1.35;margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+h3{font-size:19px;margin:26px 0 10px;color:#203b60}h4{font-size:16px;margin:18px 0 8px}
+p{margin:10px 0}ul,ol{padding-left:24px}li{margin:6px 0}
+.callout{border-left:4px solid var(--blue);background:var(--blue2);padding:14px 17px;border-radius:0 9px 9px 0;margin:16px 0}
+.callout.green{border-color:var(--green);background:var(--green2)}.callout.amber{border-color:var(--amber);background:var(--amber2)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:16px 0}
+.tile{border:1px solid var(--line);border-radius:11px;padding:16px;background:#fff}.tile b{display:block;color:#244a7a;margin-bottom:5px}
+.diagram{background:#f8fafd;border:1px solid var(--line);border-radius:12px;padding:18px;margin:18px 0;text-align:center}
+.flow{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:8px 0}
+.node{background:#eaf1fc;border:1px solid #c8d8ef;border-radius:9px;padding:12px 15px;min-width:130px}
+.node.green{background:#e8f5ef;border-color:#b9dfd0}.node.amber{background:#fff4df;border-color:#eed4a5}
+.node small{display:block;color:var(--muted);font-size:12px}.arrow{font-size:22px;color:#70839b}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}th{background:#f0f4f9;color:#29415f}
+code{background:#f0f3f7;padding:2px 5px;border-radius:4px;font-size:.9em}
+.metric{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:16px 0}.metric .tile strong{font-size:30px;color:var(--green);display:block;line-height:1.3}
+.bar{height:10px;background:#e8edf3;border-radius:20px;overflow:hidden;margin:8px 0 14px}.bar span{display:block;height:100%;background:#258565;border-radius:20px}
+.small{font-size:13px;color:var(--muted)}.footer{max-width:1120px;margin:0 auto;padding:0 22px 45px;color:var(--muted);font-size:13px}
+@media(max-width:850px){.layout{display:block}nav{position:relative;top:auto;max-height:none;margin-bottom:20px}.grid,.metric{grid-template-columns:1fr}.intro,.section,.conclusion{padding:22px 19px}.hero{padding:44px 22px}}
+@media print{body{background:white}.layout{display:block;max-width:none}.hero{background:#17385f!important;print-color-adjust:exact}.layout nav{display:none}.intro,.section,.conclusion{box-shadow:none;break-inside:avoid}.section{break-inside:auto}a{color:inherit}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="eyebrow">VLDB 2026 · OceanBase Research</div>
+  <h1>OceanBase Bacchus：<br>云原生共享存储架构深度解读</h1>
+  <p>从传统 Shared-Nothing 数据库走向对象存储驱动的共享存储体系：解析 Bacchus 的架构动机、关键创新、工程机制、性能结果与技术战略。</p>
+  <div class="tags"><span class="tag">Shared Storage</span><span class="tag">LSM Tree + Object Storage</span><span class="tag">PALF / SSLog</span><span class="tag">Shared Block Cache</span><span class="tag">Multi-Cloud</span></div>
+</header>
+<div class="layout">
+<nav>
+<strong>内容导航</strong>
+<a href="#summary">核心结论</a>
+<a href="#motivation">一、为什么做 Bacchus</a>
+<a href="#architecture">二、整体架构</a>
+<a href="#logging">三、创新一：共享日志</a>
+<a href="#cache">四、创新二：共享块缓存</a>
+<a href="#compaction">五、创新三：数据持久化与 Compaction</a>
+<a href="#metadata">六、元数据与 GC</a>
+<a href="#transaction">七、一笔事务的完整路径</a>
+<a href="#evaluation">八、实验与成本</a>
+<a href="#strategy">九、架构大逻辑</a>
+<a href="#limits">十、边界与风险</a>
+<a href="#comparison">十一、与其他架构比较</a>
+<a href="#takeaways">十二、总结与研究重点</a>
+</nav>
+<main>
+<section class="intro" id="summary">
+<h2>核心结论</h2>
+<p><b>Bacchus 的真正创新，不是单独提出一种新的 LSM Tree，也不是把数据库文件简单搬到对象存储，而是围绕共享存储重新组织数据库的日志、元数据、缓存、Compaction、GC、恢复和资源调度。</b></p>
+<div class="callout">
+它要解决的核心问题是：如何让计算节点不再持有完整的数据副本，同时仍然保持 OLTP 所需的低延迟、高吞吐和可靠性，并让计算、日志、缓存、持久化存储及后台任务能够独立伸缩。
+</div>
+<div class="grid">
+<div class="tile"><b>1. PALF / Shared Log</b>将日志能力从计算节点抽离，成为共享服务，是计算节点可重建化的关键。</div>
+<div class="tile"><b>2. Shared Block Cache</b>把缓存从节点私有资源变成 AZ 级共享资源，缓解对象存储访问延迟。</div>
+<div class="tile"><b>3. SSLog / 元数据协调</b>统一传播元数据变化，为缓存失效、版本切换和安全回收提供协调基础。</div>
+<div class="tile"><b>4. 后台任务服务化</b>将 Compaction、GC 等工作从前台计算路径剥离，减少资源竞争。</div>
+</div>
+<p class="small">论文：OceanBase Bacchus: A High-Performance and Scalable Cloud-Native Shared Storage Architecture for Multi-Cloud，arXiv:2602.23571。</p>
+</section>
+
+<section class="section" id="motivation">
+<h2>一、OceanBase 为什么要做 Bacchus</h2>
+<h3>1.1 传统 Shared-Nothing 架构的结构性约束</h3>
+<p>传统分布式数据库以节点为资源组织单元。每个 Observer 同时承担计算、日志、数据存储、缓存和部分后台维护工作，数据通过多副本复制保证可靠性。</p>
+<div class="diagram">
+<div class="flow"><div class="node">Observer A<small>计算 + 日志 + 数据 + 缓存</small></div><div class="node">Observer B<small>计算 + 日志 + 数据 + 缓存</small></div><div class="node">Observer C<small>计算 + 日志 + 数据 + 缓存</small></div></div>
+<p class="small">节点既是计算单元，也是数据副本和运维管理单元。</p>
+</div>
+<ul>
+<li><b>存储成本：</b>100TB 逻辑数据采用三副本，数据库层需要约300TB物理存储，尚未计入额外空间。</li>
+<li><b>弹性受限：</b>扩容计算节点往往伴随数据迁移、副本构建、日志同步和缓存重建。</li>
+<li><b>冷热数据成本不匹配：</b>历史数据访问频率低，却长期占用高性能云盘。</li>
+</ul>
+<h3>1.2 为什么不能简单地把云盘换成对象存储</h3>
+<p>对象存储容量便宜、弹性大，但更适合对象级读写和批量访问，不适合数据库高频随机小 I/O。对象存储的访问延迟、请求粒度和 IOPS 特征，与 OLTP 的要求存在明显差异。</p>
+<table><tr><th>维度</th><th>高性能云盘</th><th>对象存储</th></tr>
+<tr><td>访问延迟</td><td>较低</td><td>较高</td></tr><tr><td>随机读写</td><td>适合</td><td>不适合高频小 I/O</td></tr><tr><td>数据修改</td><td>支持块级原地修改</td><td>更适合对象级写入、追加与替换</td></tr><tr><td>容量成本</td><td>较高</td><td>较低</td></tr></table>
+<div class="callout green"><b>架构命题：</b>不是“如何把数据放到对象存储”，而是“如何让数据库使用对象存储，同时尽量不让前台事务感知其高延迟”。</div>
+<h3>1.3 为什么采用 LSM Tree 路径</h3>
+<p>LSM Tree 将更新先写入日志和内存，再生成不可变 SSTable，通过后续合并整理数据。它减少了频繁原地修改数据页的需求，与对象存储的对象级写入模式更契合。</p>
+<div class="grid">
+<div class="tile"><b>B+ Tree</b>更新通常需要定位并修改已有页面，涉及随机 I/O、页分裂和页面竞争。</div>
+<div class="tile"><b>LSM Tree</b>先写日志和 MemTable，再生成不可变 SSTable，后续通过 Compaction 合并。</div>
+</div>
+<p>但 LSM Tree 只解决了数据组织与对象存储的适配问题，并没有自动解决多计算节点共享日志、元数据协调和缓存一致性。这些正是 Bacchus 进一步设计的重点。</p>
+</section>
+
+<section class="section" id="architecture">
+<h2>二、Bacchus 的整体架构：四类资源解耦</h2>
+<p>从架构视角，可以把 Bacchus 理解为四类独立资源：计算、日志、缓存和持久化存储。后台 Compaction、GC 等任务则作为可调度的服务能力。</p>
+<div class="diagram">
+<div class="node" style="display:inline-block;min-width:75%">RW / RO Compute Nodes<small>SQL、事务、MemTable、查询执行、本地内存与缓存</small></div>
+<div class="flow"><span class="arrow">↕</span></div>
+<div class="flow">
+<div class="node green">PALF Log Service<small>事务日志、日志共识</small></div>
+<div class="node green">Shared Block Cache<small>AZ 级宏块缓存</small></div>
+</div>
+<div class="flow"><span class="arrow">↕</span></div>
+<div class="node amber" style="display:inline-block;min-width:75%">Object Storage<small>SSTable、历史数据、基线数据</small></div>
+<div class="flow"><span class="arrow">↕</span></div>
+<div class="node">Background Services<small>Compaction / GC / Recovery / Migration</small></div>
+</div>
+<table><tr><th>资源层</th><th>主要模块</th><th>职责</th></tr>
+<tr><td>计算层</td><td>RW / RO 节点</td><td>SQL、事务、MemTable、查询执行</td></tr>
+<tr><td>日志层</td><td>PALF / LogServer</td><td>CLog、元数据日志、日志复制与一致性</td></tr>
+<tr><td>缓存层</td><td>Memory / Local Cache / BlockServer</td><td>热数据访问、缓存共享、预热</td></tr>
+<tr><td>持久化层</td><td>Object Storage</td><td>SSTable、历史数据、基线数据</td></tr>
+</table>
+<div class="callout">“无状态计算”不是说计算节点完全没有本地状态，而是核心数据状态不再依赖某一台计算机器独占保存；本地缓存和必要状态可以通过恢复流程重建。</div>
+</section>
+
+<section class="section" id="logging">
+<h2>三、核心创新一：Shared Service-Oriented Logging</h2>
+<h3>3.1 日志为什么成为存算分离的关键</h3>
+<p>事务提交需要可靠日志。若所有计算节点直接向对象存储写高频小日志，会遇到延迟高、请求碎片化、写入顺序协调复杂等问题；若仍在每个计算节点维护完整日志副本，又会削弱存算分离的资源收益。</p>
+<h3>3.2 PALF：把日志能力变成独立服务</h3>
+<p>PALF（Paxos-backed Append-only Log File system）是基于 Paxos 的追加式日志文件系统。Bacchus 将日志持久化和副本一致性能力从计算节点中抽离，由独立 LogServer 承载。</p>
+<div class="diagram">
+<div class="node">RW Compute Nodes<small>各 Log Stream 的写入 Leader</small></div>
+<div class="flow"><span class="arrow">↕</span></div>
+<div class="node green" style="min-width:75%">PALF Log Service<small>LogServer · 日志持久化 · Paxos 共识</small>
+<div class="flow"><div class="node green">Replica 1</div><div class="node green">Replica 2</div><div class="node green">Replica 3</div></div></div>
+<div class="flow"><span class="arrow">↕</span></div>
+<div class="node">RO Compute Nodes<small>拉取日志并 Replay</small></div>
+</div>
+<p>关键不是 Paxos 本身，而是将日志服务化，使计算节点能够共享可靠日志，而不必各自维护完整的数据副本。</p>
+<h3>3.3 Sharded Single-Writer，而不是 Multi-Writer</h3>
+<p>Bacchus 将数据划分为多个 Log Stream。每个 Log Stream 对应一组逻辑数据分区（例如若干 Tablet），同一 Log Stream 只有一个 Leader 负责写入；不同 Log Stream 可以由不同节点并行写入。</p>
+<table><tr><th>Log Stream</th><th>管理数据</th><th>Leader</th></tr>
+<tr><td>LS-1</td><td>Tablet 1、2</td><td>Node A</td></tr><tr><td>LS-2</td><td>Tablet 3、4</td><td>Node B</td></tr><tr><td>LS-3</td><td>Tablet 5、6</td><td>Node C</td></tr></table>
+<div class="callout green"><b>设计思想：</b>不追求多个节点并发修改同一条日志，而是先按 Log Stream 切分写入权，再让不同分片并行工作。这样既保留单流顺序，又获得整体并行度。</div>
+<h3>3.4 本地日志缓存与共享日志归档协同</h3>
+<p>Bacchus 并非每次事务提交都直接等待远端对象存储。计算节点保留本地云盘作为日志的非易失缓存，前台日志处理走低延迟路径；历史日志再归档到共享日志服务。其他节点可消费本地可用日志，在需要时从共享日志服务读取。</p>
+<ol><li>事务生成 CLog。</li><li>通过日志持久化与复制机制保障可靠性。</li><li>Leader 将历史 CLog 归档到共享日志服务。</li><li>确认迁移和消费位置允许后，回收本地日志。</li><li>RO 节点统一消费日志并 Replay。</li></ol>
+<p>PALF 内部还使用 Batch 和 Pipeline：Batch 聚合多条日志以降低共识通信开销；Pipeline 允许多批日志流水执行，提高吞吐。</p>
+<h3>3.5 SSLog：共享元数据日志</h3>
+<p>数据库除了业务数据，还有 Tablet/SSTable 映射、Schema、分区变化、Compaction 状态、版本信息等元数据。频繁将这些小变更直接写入对象存储会造成大量小 I/O。</p>
+<p>SSLog 可以理解为专门用于元数据变化的共享日志，记录 KV 形式的元数据变更。相关节点消费 SSLog，更新本地元数据视图，并据此触发版本更新或缓存失效。</p>
+<div class="callout">PALF 不只是事务日志基础设施；结合 SSLog，它还成为共享存储架构中元数据变化传播和协调的重要基础。</div>
+<p><b>层次区分：</b>PALF 的 Paxos 共识解决日志服务副本间一致性；Log Stream 的 Leader 机制解决数据库分区写入协调。两者属于不同层次。</p>
+</section>
+
+<section class="section" id="cache">
+<h2>四、核心创新二：Shared Block Cache Service</h2>
+<h3>4.1 为什么仅有本地缓存不够</h3>
+<p>如果十个计算节点都缓存同一批热点数据，可能重复占用大量云盘容量。扩容、故障切换和节点迁移时，也需要重新加载缓存，导致恢复慢、性能抖动。</p>
+<h3>4.2 多级缓存体系</h3>
+<div class="diagram">
+<div class="flow"><div class="node">L1：计算节点内存<small>Micro-block · 最热点数据</small></div></div>
+<div class="flow"><span class="arrow">↓</span></div>
+<div class="flow"><div class="node">L2：计算节点本地云盘<small>Micro-block · 热数据与局部缓存</small></div></div>
+<div class="flow"><span class="arrow">↓</span></div>
+<div class="flow"><div class="node green">L3：AZ 共享缓存<small>Macro-block · BlockServer</small></div></div>
+<div class="flow"><span class="arrow">↓</span></div>
+<div class="flow"><div class="node amber">Object Storage<small>全量持久化数据</small></div></div>
+</div>
+<table><tr><th>层级</th><th>位置</th><th>粒度</th><th>作用</th></tr>
+<tr><td>L1</td><td>计算节点内存</td><td>Micro-block</td><td>最热点数据</td></tr>
+<tr><td>L2</td><td>计算节点本地云盘</td><td>Micro-block</td><td>热数据、节点局部缓存</td></tr>
+<tr><td>L3</td><td>AZ 共享缓存</td><td>Macro-block</td><td>温数据、跨节点复用</td></tr>
+<tr><td>后端</td><td>对象存储</td><td>SSTable / Macro-block</td><td>全量持久化</td></tr></table>
+<p>共享缓存由独立 BlockServer 集群实现，使用本地云盘作为缓存介质。同一 AZ 内的 RW、RO 节点共享访问。它是 Read-only Cache，不是事务写入的权威存储，也不是完整数据副本。</p>
+<h3>4.3 缓存一致性：SSLog + Version-based Invalidation</h3>
+<p>假设 Node A 正在读取旧 Macro-block，Node B 完成 Compaction 并产生新 SSTable。若 BlockServer 仍提供旧版本，Node A 可能读取过期数据。Bacchus 将元数据版本变化通过 SSLog 传播，并利用版本校验识别缓存失效。</p>
+<ol><li>Compaction 或其他操作产生新数据版本。</li><li>元数据变化写入 SSLog。</li><li>RW、RO 节点消费 SSLog，感知版本变化。</li><li>缓存条目进行版本校验。</li><li>版本不匹配时，旧缓存不能继续使用，需要刷新。</li></ol>
+<div class="callout green">设计原则：缓存一致性尽量复用共享日志和元数据传播机制，而不是再造一套复杂的全局同步系统。</div>
+<h3>4.4 Cache Warming：不只复制数据，也复制访问行为</h3>
+<table><tr><th>场景</th><th>预热策略</th></tr>
+<tr><td>Major 版本切换</td><td>预加载新版本热点 Macro-block</td></tr>
+<tr><td>Leader / Follower 切换</td><td>同步 Leader 访问序列，Follower 提前加载 Micro-block</td></tr>
+<tr><td>副本迁移</td><td>通过共享缓存获取数据并迁移热点数据</td></tr>
+<tr><td>本地云盘扩缩容</td><td>调整 ARC 缓存及历史列表</td></tr></table>
+<p>Leader/Follower 预热的价值在于：缓存命中率不仅取决于容量，也取决于缓存内容是否匹配业务访问模式。同步访问序列相当于复制一部分访问行为。</p>
+</section>
+
+<section class="section" id="compaction">
+<h2>五、核心创新三：重新设计数据持久化与 Compaction</h2>
+<h3>5.1 为什么传统 Dump / Compaction 不够</h3>
+<p>在 Bacchus 中，数据落盘不仅影响内存释放，还影响日志回收、节点恢复、副本加载和弹性扩容。若大量数据长期停留在 MemTable 对应的日志中，故障恢复就需要 Replay 更多日志。</p>
+<h3>5.2 Micro Compaction：提前形成小型 SSTable</h3>
+<p>Bacchus 引入 Micro SSTable。它不是等 MemTable 完全冻结后才持久化，而是在更早阶段将部分数据形成小型 SSTable，并先放在计算节点本地磁盘缓存，后续再上传对象存储。</p>
+<div class="diagram">
+<div class="node">MemTable<small>增量数据</small></div><div class="flow"><span class="arrow">↓</span></div>
+<div class="flow"><div class="node green">Micro SSTable<small>提前持久化</small></div><div class="node green">Mini SSTable<small>MemTable 冻结后生成</small></div></div>
+<div class="flow"><span class="arrow">↓</span></div><div class="node amber">Minor SSTable<small>合并增量数据</small></div>
+</div>
+<p>Micro SSTable 的价值不仅是提高写入吞吐，更重要的是更早推进数据持久化和 Checkpoint，减少故障恢复时需要 Replay 的日志量。</p>
+<h3>5.3 Minor Compaction：Macro-block 复用</h3>
+<p>假设原始 SSTable 有100个 Macro-block，其中只有10个发生变化。若 Compaction 每次都重写100个块，会产生不必要的写放大。通过复用未变化的 Macro-block，只为变化部分写入新块，可以降低对象存储写入量、数据搬运、网络带宽和存储请求成本。</p>
+<p>论文还描述了 SSWriter 机制：在指定 Log Stream 等作用域内，由 Leader 选择一个副本承担对象存储写任务，并通过 Lease 控制有效写入权，避免多个副本并发更新相同逻辑数据。</p>
+<h3>5.4 Major Compaction：从前台计算节点卸载</h3>
+<p>传统数据库中 Compaction 与前台事务争用 CPU、内存和 I/O。Bacchus 将 Major Compaction 主要放到共享存储层执行，并支持在资源不足或有空闲计算节点时进行 Compaction Offloading。</p>
+<ol><li>Root Service 发起 Major Compaction。</li><li>Leader 按 Tablet 划分任务并发布调度信息。</li><li>共享存储层执行节点读取相关 SSTable 并合并。</li><li>新版本 SSTable 写入对象存储，元数据随之更新。</li><li>计算节点通过 SSLog 感知新版本，更新本地引用。</li><li>执行缓存预热和 CRC 校验，确认后释放任务资源。</li></ol>
+<div class="callout green">核心变化：前台事务计算与后台数据整理使用不同资源池。Compaction 不再必须绑定在前台数据库节点上。</div>
+</section>
+
+<section class="section" id="metadata">
+<h2>六、元数据与 GC：共享存储下的全局协调</h2>
+<h3>6.1 元数据分层管理</h3>
+<p>Bacchus 按 Node、Tenant、Log Stream、Tablet 等层级组织元数据，并区分节点私有元数据和共享元数据。系统层级与用户租户层级承担不同职责，避免所有元数据都依赖一个庞大的全局索引。</p>
+<table><tr><th>元数据层级</th><th>策略</th><th>原因</th></tr>
+<tr><td>Log Stream 及以上</td><td>Write-through</td><td>更新频率较低，强调及时共享</td></tr>
+<tr><td>Tablet 及以下</td><td>Write-back</td><td>版本较多、更新更频繁</td></tr></table>
+<h3>6.2 为什么 GC 在共享存储下更危险</h3>
+<p>Node A 可能正在读取某个 SSTable，Node B 认为该文件已过期，Node C 仍持有旧版本元数据，长事务也可能需要历史版本。直接删除可能导致仍在使用的数据不可访问。</p>
+<p>Bacchus 通过 GC Coordinator、Lease、最小读取 SCN（min_read_scn）、日志 Replay 位置和分阶段删除来协调。</p>
+<ol><li>每个 Log Stream 选举 GC Coordinator。</li><li>Coordinator 获取有期限的 Lease。</li><li>收集相关节点的最小读取 SCN 和最小 Replay 位置。</li><li>判断日志和 SSTable 是否已经安全可回收。</li><li>先将删除意图写入 SSLog，让其他节点感知。</li><li>确认安全后执行实际删除并更新元数据。</li></ol>
+<div class="callout amber">GC 不是简单的文件清理，而是跨节点、跨事务、跨版本的安全协调。共享存储并不意味着可以无协调地删除数据。</div>
+</section>
+
+<section class="section" id="transaction">
+<h2>七、一笔事务在 Bacchus 中经历什么</h2>
+<h3>7.1 前台事务</h3>
+<ol><li>SQL 到达 RW 节点，定位数据所属 Tablet。</li><li>读取优先访问内存和本地缓存；必要时访问 AZ 共享缓存。</li><li>更新产生 CLog，通过相应日志机制保障持久性。</li><li>新数据进入 MemTable。</li><li>事务完成提交。前台不必等待完整 SSTable 合并，也不必每次更新都直接写对象存储。</li></ol>
+<h3>7.2 后台持久化</h3>
+<div class="diagram">
+<div class="node">MemTable</div><div class="flow"><span class="arrow">↓</span></div>
+<div class="flow"><div class="node green">Micro SSTable</div><div class="node green">Mini SSTable</div></div>
+<div class="flow"><span class="arrow">↓</span></div><div class="node amber">Minor Compaction</div>
+<div class="flow"><span class="arrow">↓</span></div><div class="node amber">Major Compaction</div>
+<div class="flow"><span class="arrow">↓</span></div><div class="node">Object Storage</div>
+</div>
+<h3>7.3 RO 节点如何看到最新数据</h3>
+<p>RO 节点不需要从 RW 节点复制完整数据库，而是从 PALF 获取 CLog 并 Replay，从 SSLog 获取元数据变化，发现新 SSTable 后读取共享对象存储，并利用 Shared Block Cache 复用温数据。</p>
+<div class="callout">传统节点间数据复制，转变为：共享日志同步 + 共享元数据同步 + 共享数据引用 + 局部缓存构建。</div>
+</section>
+
+<section class="section" id="evaluation">
+<h2>八、实验结果与成本模型</h2>
+<p class="small">以下为论文报告的测试结果摘要。不同实验的硬件、数据集、并发度和比较对象不同，不能将所有数字视为同一条件下的横向排名。</p>
+<h3>8.1 OLTP 写入与稳定性</h3>
+<table><tr><th>指标</th><th>Bacchus</th><th>HBase 1.4.7</th></tr>
+<tr><td>500GB 数据集平均写入吞吐</td><td>3,770.86 ops/s</td><td>3,993.79 ops/s</td></tr>
+<tr><td>持续写入现象</td><td>未观察到明显周期性停顿</td><td>出现多次明显停顿</td></tr></table>
+<p>这组实验中 Bacchus 的平均吞吐并非最高，但写入更平稳。论文将其与快速 Dump、提前生成 Micro SSTable 等机制联系起来。</p>
+<h3>8.2 另一组 PUT / GET 测试</h3>
+<table><tr><th>系统</th><th>PUT TPS</th><th>GET QPS</th></tr>
+<tr><td>OceanBase 4.2.5</td><td>45,332</td><td>48,800</td></tr>
+<tr><td>OceanBase 4.4.x</td><td>51,612</td><td>56,416</td></tr>
+<tr><td>Lindorm HBase</td><td>44,028</td><td>16,000</td></tr>
+<tr><td>Tencent HBase</td><td>40,770</td><td>60,600</td></tr></table>
+<p class="small">测试条件存在节点数量差异：Tencent HBase 使用3个节点，其他系统使用2个节点。总吞吐量不能脱离硬件配置解读。</p>
+<h3>8.3 OLAP 测试</h3>
+<table><tr><th>测试</th><th>论文报告的整体改善</th></tr>
+<tr><td>TPC-H 100GB</td><td>48.5%</td></tr>
+<tr><td>TPC-H 1TB 冷查询</td><td>约40%</td></tr>
+<tr><td>TPC-DS 100GB</td><td>43.8%</td></tr>
+<tr><td>ClickBench</td><td>89%</td></tr></table>
+<p>这些结果是整体测试层面的报告，不意味着每条 SQL 都有同样提升。论文也报告了个别查询（如 TPC-H Q9）Bacchus 慢于 StarRocks 的情况。共享存储不必然拖累分析查询，大块顺序读取和缓存体系可以缓解对象存储延迟。</p>
+<h3>8.4 存储成本：59% 与 89%</h3>
+<div class="metric">
+<div class="tile"><span>OLTP 成本下降</span><strong>59%</strong><div class="bar"><span style="width:41%"></span></div><span class="small">传统约 $30,000/月；Bacchus 约 $12,300/月</span></div>
+<div class="tile"><span>OLAP 成本下降</span><strong>89%</strong><div class="bar"><span style="width:11%"></span></div><span class="small">传统约 $30,000/月；Bacchus 约 $3,300/月</span></div>
+</div>
+<p>论文成本模型使用 EBS GP2 约 $0.10/GB/月、S3 Standard 约 $0.023/GB/月的假设。</p>
+<table><tr><th>场景</th><th>假设</th><th>月成本估算</th></tr>
+<tr><td>传统</td><td>100TB × 3份云盘副本</td><td>$30,000</td></tr>
+<tr><td>Bacchus OLTP</td><td>100TB 对象存储 + 100TB 云盘缓存</td><td>$12,300</td></tr>
+<tr><td>Bacchus OLAP</td><td>100TB 对象存储 + 10TB 云盘缓存</td><td>$3,300</td></tr></table>
+<div class="callout amber">“一份逻辑数据”不意味着云厂商底层只保存一份物理数据。成本优势来自将数据库自身维护的多份完整数据副本，转为依赖对象存储自身的持久性保障，并由独立日志服务保障日志可靠性。</div>
+</section>
+
+<section class="section" id="strategy">
+<h2>九、OceanBase 构建 Bacchus 的大逻辑</h2>
+<h3>9.1 从节点资源绑定转向云资源池化</h3>
+<p>传统数据库以节点作为资源单元，CPU、内存、磁盘、日志、缓存和后台任务绑定。Bacchus 将 Compute、Log、Cache、Storage 拆成可独立配置的资源池。</p>
+<div class="grid">
+<div class="tile"><b>传统模式</b>CPU + Memory + Disk + Log + Cache 绑定在数据库节点上，通常整体扩缩容。</div>
+<div class="tile"><b>Bacchus</b>Compute / Log / Cache / Storage 分别伸缩，后台任务也可调度到独立资源。</div>
+</div>
+<h3>9.2 从数据库内部功能转向独立服务能力</h3>
+<table><tr><th>原有耦合能力</th><th>服务化方向</th></tr>
+<tr><td>本地日志管理</td><td>PALF Shared Log Service</td></tr>
+<tr><td>节点本地缓存</td><td>Shared Block Cache Service</td></tr>
+<tr><td>元数据变更传播</td><td>SSLog + Metadata Service</td></tr>
+<tr><td>Compaction</td><td>Shared Storage Background Service</td></tr>
+<tr><td>垃圾回收</td><td>全局协调的 GC Service</td></tr></table>
+<p>这些服务并非彼此孤立：PALF 提供共享日志，SSLog 传播元数据，缓存复用版本信息进行失效，Compaction 发布新版本，GC 利用全局状态安全删除。它们构成一个协作体系。</p>
+<h3>9.3 从数据库副本可靠性转向存储服务可靠性</h3>
+<p>传统架构通过数据库维护多份完整数据副本。Bacchus 将数据持久性更多交给对象存储，将日志一致性交给 PALF，将计算节点恢复交给日志 Replay 和共享数据重建，将缓存恢复交给本地云盘与共享缓存。</p>
+<div class="callout green"><b>本质：</b>可靠性边界重新划分。不是数据库不再需要高可用，而是数据、日志、计算和缓存分别由不同层承担相应的可靠性责任。</div>
+</section>
+
+<section class="section" id="limits">
+<h2>十、架构边界与需要警惕的问题</h2>
+<h3>10.1 Multi-Cloud 不等于跨云多活</h3>
+<table><tr><th>能力</th><th>论文所展示的情况</th></tr>
+<tr><td>适配 AWS S3、Alibaba OSS、Azure Blob、MinIO 等</td><td>明确支持</td></tr>
+<tr><td>不同云环境独立部署</td><td>明确支持</td></tr>
+<tr><td>跨云迁移</td><td>架构有基础，但论文未充分展示完整迁移流程</td></tr>
+<tr><td>跨云实时同步与多活</td><td>论文没有证明</td></tr>
+<tr><td>跨云统一日志共识</td><td>论文没有证明</td></tr></table>
+<p>更准确地说，Bacchus 展示的是 Multi-Cloud Deployment，而不是已经实现跨云统一分布式数据库集群。</p>
+<h3>10.2 PALF 可能成为新的性能约束点</h3>
+<ul><li>单个 Log Stream 只有一个写 Leader，热点流是否会成为瓶颈？</li><li>日志服务扩容时如何重新分布 Log Stream？</li><li>LogServer 故障、网络分区时恢复时间如何？</li><li>计算节点与日志服务之间的网络延迟对提交延迟有多大影响？</li></ul>
+<p>Shared Log 并没有消除日志协调，而是把日志协调从计算节点内部转移到独立服务层。</p>
+<h3>10.3 Shared Block Cache 可能形成新的热点</h3>
+<ul><li>热门 Macro-block 是否造成 BlockServer 热点？</li><li>共享缓存的网络带宽是否足够？</li><li>BlockServer 故障后如何恢复？</li><li>多租户之间如何隔离缓存资源和淘汰行为？</li></ul>
+<h3>10.4 对象存储并非所有负载都更便宜</h3>
+<p>如果全量数据都经常访问、随机读频繁、缓存命中率低、Compaction 很重，缓存、网络和对象存储请求成本可能抵消部分容量成本优势。Bacchus 更适合具有明显冷热分布、可由多级缓存吸收热点访问的工作负载。</p>
+</section>
+
+<section class="section" id="comparison">
+<h2>十一、与其他云原生数据库架构比较</h2>
+<table><tr><th>维度</th><th>传统 Shared-Nothing</th><th>典型 Shared-Disk / Socrates 路径</th><th>Bacchus</th></tr>
+<tr><td>计算节点</td><td>计算与存储耦合</td><td>访问共享存储</td><td>访问共享存储</td></tr>
+<tr><td>数据持久化</td><td>本地云盘多副本</td><td>共享持久化存储</td><td>对象存储</td></tr>
+<tr><td>日志</td><td>节点副本日志</td><td>独立日志或共享存储协调</td><td>PALF 服务化共享日志</td></tr>
+<tr><td>缓存</td><td>节点本地</td><td>分层缓存</td><td>本地缓存 + AZ 共享缓存</td></tr>
+<tr><td>数据组织</td><td>依数据库实现而定</td><td>依具体系统而定</td><td>LSM Tree</td></tr>
+<tr><td>后台整理</td><td>计算节点承担</td><td>与共享存储协同</td><td>共享存储层及可卸载计算资源</td></tr>
+<tr><td>核心目标</td><td>高性能分布式数据库</td><td>云原生共享磁盘</td><td>低成本对象存储上的高性能数据库</td></tr></table>
+<p>Bacchus 并不是简单复制 Socrates。其路径更突出 LSM Tree、对象存储、服务化共享日志和 AZ 级共享块缓存的组合。它通过缓存和后台服务屏蔽对象存储的性能劣势。</p>
+</section>
+
+<section class="conclusion" id="takeaways">
+<h2>十二、总结：应该记住的五个核心思想</h2>
+<ol>
+<li><b>数据与计算分离：</b>计算节点不再持有完整数据副本，成为可快速恢复和扩缩容的执行单元。</li>
+<li><b>日志与计算分离：</b>PALF 作为独立共享日志服务，解决共享存储下事务日志的共享、持久化和一致性。</li>
+<li><b>缓存与计算分离：</b>AZ 级 Shared Block Cache 让多个计算节点共享温数据，减少冗余并降低扩容成本。</li>
+<li><b>前台与后台分离：</b>Micro Compaction、Major Compaction Offloading 等机制，将数据整理从前台事务中剥离。</li>
+<li><b>数据可靠性与数据库副本解耦：</b>对象存储承担数据持久化，PALF 承担日志复制与一致性，减少数据库自身维护的完整数据副本。</li>
+</ol>
+<div class="callout green">
+<b>最终判断：</b>Bacchus 是一次面向公有云环境的数据库存储架构重构。它的核心价值在于把 LSM Tree、对象存储、共享日志、共享缓存、元数据协调和后台任务服务化重新组合成一个完整系统，而不是某个孤立算法的突破。
+</div>
+<h3>最值得继续深挖的三个问题</h3>
+<div class="grid">
+<div class="tile"><b>1. PALF 与 Shared Log</b>如何把 Observer 内部日志抽象为独立服务？Log Stream 如何映射、分片、调度和扩展？</div>
+<div class="tile"><b>2. Shared Block Cache</b>BlockServer 如何组织 Macro-block、处理并发读取、缓存淘汰、版本失效和故障恢复？</div>
+<div class="tile"><b>3. 元数据与事务协调</b>SSLog、SSWriter、事务提交和 GC 如何协同？在对象存储缺少原生事务和互斥语义时，如何建立可靠协议？</div>
+</div>
+<p class="small">建议阅读顺序：先理解整体架构与资源解耦，再重点读 PALF / SSLog、Shared Block Cache，最后研究 Compaction、GC 和实验评估。这样更容易看出各项机制之间的因果关系。</p>
+</section>
+</main>
+</div>
+<div class="footer">整理说明：本文依据本次对话中的论文解读材料重新编排为独立 HTML，适合浏览器阅读、打印或另存为 PDF。具体数字和实现细节以论文原文为准。</div>
+</body>
+</html>

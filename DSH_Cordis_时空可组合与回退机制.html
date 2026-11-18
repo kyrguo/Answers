@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DSH Cordis：时空可组合与回退机制</title>
+<style>
+:root{--ink:#182230;--muted:#5d6b7b;--line:#dce3eb;--bg:#f4f7fb;--blue:#2457a7;--blue2:#eaf1fc;--green:#18794e;--greenbg:#eaf6ef;--amber:#996515;--amberbg:#fff5df;--red:#a33a36;--redbg:#fff0ee}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.hero{background:linear-gradient(135deg,#14243a,#244d7e);color:white;padding:58px 24px 50px}
+.wrap{max-width:1040px;margin:auto;padding:0 24px}
+.eyebrow{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#b9d1f3}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.2;margin:12px 0 16px}
+.hero p{max-width:780px;color:#e1eaf6;font-size:18px;margin:0}
+main{max-width:1040px;margin:0 auto;padding:34px 24px 80px}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 30px}
+nav a{font-size:13px;text-decoration:none;color:var(--blue);background:white;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+section{background:white;border:1px solid var(--line);border-radius:16px;padding:28px;margin:22px 0;box-shadow:0 4px 16px #20334a08}
+h2{font-size:25px;margin:0 0 14px;line-height:1.35}
+h3{font-size:18px;margin:24px 0 8px}
+p{margin:10px 0} .lead{font-size:18px;color:#34445a}
+.muted{color:var(--muted)} .small{font-size:13px;color:var(--muted)}
+.callout{border-left:4px solid var(--blue);background:var(--blue2);padding:14px 17px;border-radius:0 10px 10px 0;margin:18px 0}
+.callout.green{border-color:var(--green);background:var(--greenbg)}
+.callout.amber{border-color:#d49a2c;background:var(--amberbg)}
+.callout.red{border-color:var(--red);background:var(--redbg)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{border:1px solid var(--line);border-radius:12px;padding:17px;background:#fff}
+.card h3{margin:0 0 6px}
+.tag{display:inline-block;font-size:12px;font-weight:650;border-radius:20px;padding:2px 9px;background:var(--blue2);color:var(--blue);margin:2px 4px 2px 0}
+.tag.green{background:var(--greenbg);color:var(--green)} .tag.amber{background:var(--amberbg);color:var(--amber)} .tag.red{background:var(--redbg);color:var(--red)}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#f4f7fb;color:#34445a;font-weight:650}
+pre{background:#152235;color:#e8f0fa;padding:18px;border-radius:11px;overflow:auto;font-size:13px;line-height:1.6}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.flow{display:flex;flex-direction:column;align-items:center;gap:8px;margin:18px 0}
+.flowbox{width:min(100%,600px);padding:13px 16px;border:1px solid var(--line);border-radius:10px;text-align:center;background:#fbfcfe}
+.flowbox.good{background:var(--greenbg);border-color:#b8dec8}.flowbox.warn{background:var(--amberbg);border-color:#ecd59e}.flowbox.bad{background:var(--redbg);border-color:#efc3bf}
+.arrow{color:#8291a3;font-size:22px;line-height:1}
+.timeline{border-left:2px solid #cbd7e5;margin:18px 0 18px 9px;padding-left:22px}
+.step{position:relative;margin:0 0 20px}.step:before{content:"";position:absolute;left:-29px;top:8px;width:12px;height:12px;background:var(--blue);border:3px solid white;box-shadow:0 0 0 1px var(--blue);border-radius:50%}
+.footer{color:var(--muted);font-size:13px;text-align:center;margin-top:35px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}section{padding:20px}main{padding:24px 14px 55px}.hero{padding:42px 18px}}
+@media print{body{background:white}.hero{background:#18385f!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}section{box-shadow:none;break-inside:avoid}nav{display:none}main{max-width:none}}
+</style>
+</head>
+<body>
+<header class="hero">
+ <div class="wrap">
+  <div class="eyebrow">DSH · Harness Runtime · Cordis</div>
+  <h1>时空可组合与回退机制</h1>
+  <p>从“插件如何加载”走向“运行环境如何动态变化”：理解 Temporal Composition、Spatial Composition，以及 Effect、Context、Session 和 Workspace 层面的回退边界。</p>
+ </div>
+</header>
+<main>
+<nav>
+ <a href="#overview">核心概念</a><a href="#temporal">时间可组合</a><a href="#spatial">空间可组合</a><a href="#rollback">回退机制</a><a href="#scenario">生产场景</a><a href="#limits">边界与误区</a><a href="#summary">总结</a>
+</nav>
+
+<section id="overview">
+ <h2>01 · 先建立整体心智模型</h2>
+ <p class="lead"><strong>Cordis 关注的是：运行时组件如何在动态环境中组合、响应变化，并在退出时清理自己造成的影响。</strong></p>
+ <div class="grid">
+  <div class="card"><span class="tag green">时间维度</span><h3>Temporal Composition</h3><p>组件什么时候进入、什么时候退出？进入时做出的修改，退出时如何撤销？</p><p class="muted small">关键词：Effect、Disposer、生命周期、卸载、热更新。</p></div>
+  <div class="card"><span class="tag">空间维度</span><h3>Spatial Composition</h3><p>组件处于哪个运行环境？需要哪些服务？依赖出现、消失或替换时，组件如何响应？</p><p class="muted small">关键词：Context、依赖注入、服务解析、激活条件、作用域。</p></div>
+ </div>
+ <div class="callout"><strong>一句话：</strong>时间可组合解决“进出时如何管理变化”；空间可组合解决“在什么环境、依赖什么才能运行”。回退则要进一步区分运行时清理、会话上下文恢复和文件工作区恢复。</div>
+ <h3>一个直观类比</h3>
+ <p>把 Agent 运行环境想象成一个可动态调整的工作团队：新成员加入时带来工具和流程；成员离开时应收回其注册的资源；团队结构变化时，依赖该成员的工作单元需要重新评估；如果某次工作做错，还要分别考虑撤销流程配置、回到某个讨论节点，或恢复被改动的文件。</p>
+</section>
+
+<section id="temporal">
+ <h2>02 · 时间可组合：进入时产生影响，退出时能够撤销</h2>
+ <h3>问题从哪里来：副作用残留</h3>
+ <p>插件加载时往往不只是“执行一段代码”，还会改变宿主环境。例如注册工具、增加事件监听器、注入服务、修改配置或扩展 Prompt。若插件卸载后这些东西仍留在系统中，就会出现残留状态。</p>
+ <div class="grid">
+  <div class="card"><h3>插件加载</h3><ul><li>注册 search 工具</li><li>添加事件监听器</li><li>注册服务或命令</li></ul><span class="tag green">产生 Effect</span></div>
+  <div class="card"><h3>插件卸载</h3><ul><li>注销 search 工具</li><li>移除监听器</li><li>撤销服务注册</li></ul><span class="tag red">执行清理</span></div>
+ </div>
+ <h3>核心机制：Revertible Effects（可逆副作用）</h3>
+ <p>每次执行一个会改变运行环境的操作，同时保留对应的清理动作（常称 disposer）。插件生命周期结束时，运行时可以执行这些清理动作。</p>
+ <pre><code>// 概念示意：不是对某个 DSH API 的逐字保证
+const dispose = registerTool("search", searchHandler);
+
+// 生命周期结束时执行
+dispose(); // 注销此前注册的工具</code></pre>
+ <div class="flow">
+  <div class="flowbox good"><strong>正向 Effect</strong><br>注册工具 / 服务 / 监听器</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox"><strong>保留 Disposer</strong><br>记录如何撤销此次注册</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox warn"><strong>插件停用或卸载</strong><br>执行清理动作</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox good"><strong>运行环境恢复</strong><br>不留下该插件管理范围内的注册残留</div>
+ </div>
+ <h3>与 try-finally 有什么不同？</h3>
+ <table><thead><tr><th>传统 try-finally</th><th>生命周期级可逆 Effect</th></tr></thead><tbody>
+ <tr><td>通常管理一次函数调用或局部资源</td><td>管理组件/插件生命周期内积累的副作用</td></tr>
+ <tr><td>清理逻辑通常由调用方组织</td><td>清理动作可由运行时统一跟踪</td></tr>
+ <tr><td>作用域较局部</td><td>可跨越动态加载、停用、卸载和热更新</td></tr>
+ </tbody></table>
+ <div class="callout green"><strong>实际价值：</strong>插件可以动态加载、卸载和替换；系统不必因为一个插件变化就重启整个 Agent Runtime。它也是“插件化”能够安全运作的重要基础。</div>
+</section>
+
+<section id="spatial">
+ <h2>03 · 空间可组合：依赖声明与 Context 作用域</h2>
+ <h3>先看依赖问题</h3>
+ <p>假设 Knowledge 插件需要 Database 和 Search 两个服务。传统方式可能要求开发者手工规定启动顺序：先数据库、再搜索、最后知识插件。插件一多，顺序和依赖关系就会变得难以维护。</p>
+ <p>更合理的方式是让插件声明“我需要什么”，由运行时依据当前环境判断它是否具备激活条件。</p>
+ <pre><code>// 概念示意：表达依赖声明，不代表精确 API 签名
+class KnowledgePlugin {
+  static inject = ["database", "search"];
+
+  apply(ctx) {
+    // 在依赖可用的 Context 中使用服务
+    // 注册 knowledge_search 等能力
+  }
+}</code></pre>
+ <h3>依赖变化时，组件也要响应</h3>
+ <div class="flow">
+  <div class="flowbox good"><strong>Database + Search 均可用</strong><br>Knowledge 插件满足依赖条件</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox good"><strong>Knowledge 插件激活</strong><br>注册知识检索能力</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox bad"><strong>Database 服务被移除</strong><br>依赖条件不再满足</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox warn"><strong>Knowledge 插件停用或重新评估</strong><br>避免继续使用失效依赖</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox good"><strong>新的 Database 实现出现</strong><br>依赖重新满足，组件可重新激活</div>
+ </div>
+ <p class="small">这里表达的是响应式依赖管理的概念流程。具体插件的激活、停用时机和错误处理，取决于 Cordis 的实际依赖声明与生命周期配置。</p>
+ <h3>Context：组件所处的运行环境和作用域</h3>
+ <p>Context 可以理解为一个带层级关系的运行环境。上层 Context 可以提供公共服务；下层 Context 可以继承可见的能力，也可以提供自己的局部实现或配置。</p>
+ <div class="flow">
+  <div class="flowbox"><strong>Root Context</strong><br>公共日志、公共配置、共享服务</div>
+  <div class="arrow">↓</div>
+  <div class="grid" style="width:100%">
+   <div class="flowbox"><strong>Agent A Context</strong><br>模型 A · 工具集 A · 局部配置</div>
+   <div class="flowbox"><strong>Agent B Context</strong><br>模型 B · 工具集 B · 局部配置</div>
+  </div>
+ </div>
+ <p>这让不同 Agent 或任务可以在不同作用域中组合能力，同时复用上层公共服务。服务解析通常遵循 Context 的层级与覆盖规则。</p>
+ <div class="callout amber"><strong>重要边界：</strong>Context 隔离是运行时作用域和服务解析层面的隔离，不等同于操作系统进程隔离、容器隔离或安全沙箱。不能仅凭 Context 就推断具备强安全边界。</div>
+ <h3>空间可组合的实际价值</h3>
+ <ul><li>不同 Agent 使用不同模型、工具和配置。</li><li>多个插件共享公共能力，但保持各自的局部实现。</li><li>依赖可以声明式管理，减少硬编码启动顺序。</li><li>服务替换或缺失时，依赖方能够随运行环境变化而调整。</li></ul>
+</section>
+
+<section id="rollback">
+ <h2>04 · 回退：必须区分三个层次</h2>
+ <p class="lead">“回退”不是一个单一按钮。回退什么对象，决定了需要哪种机制。</p>
+ <div class="grid">
+  <div class="card"><span class="tag green">层次 A</span><h3>运行时 Effect 回退</h3><p><strong>对象：</strong>插件注册的工具、服务、监听器等。</p><p><strong>手段：</strong>执行 disposer，清理插件产生的副作用。</p><p><strong>目的：</strong>插件卸载后不留下受其管理的运行时残留。</p></div>
+  <div class="card"><span class="tag">层次 B</span><h3>Session / Context 回退</h3><p><strong>对象：</strong>Agent 可见的会话历史或执行分支。</p><p><strong>手段：</strong>事件重放、分支（Fork）、视图重建或上下文调整。</p><p><strong>目的：</strong>从某个历史边界重新探索，不必沿用错误的上下文路径。</p></div>
+  <div class="card"><span class="tag amber">层次 C</span><h3>Workspace 文件回退</h3><p><strong>对象：</strong>Agent 对工作区文件所做的修改。</p><p><strong>手段：</strong>快照、差异记录、Undo/Redo 或版本控制。</p><p><strong>目的：</strong>撤销错误代码修改，恢复文件状态。</p></div>
+  <div class="card"><span class="tag red">外部副作用</span><h3>不自动包含在上述回退中</h3><p><strong>对象：</strong>已发邮件、支付、远程数据库写入、外部 API 操作。</p><p><strong>手段：</strong>事务、补偿操作、幂等设计或外部系统提供的撤销能力。</p><p><strong>目的：</strong>处理已经越过本地运行时边界的真实世界影响。</p></div>
+ </div>
+ <h3>Session 的 Event Sourcing 心智模型</h3>
+ <p>事件溯源的关键是把事件作为历史记录，再由事件构建当前可见的会话状态或消息视图。它与“只保存一份最终对话文本”不同。</p>
+ <pre><code>user/message
+assistant/message
+tool/call
+tool/result
+assistant/message
+turn/end</code></pre>
+ <p>从事件历史可以派生出模型所看到的消息序列。Fork 可以从某个历史边界创建新的执行分支；Replay 可以重新构建历史状态；Compaction 可以压缩模型可见上下文。</p>
+ <div class="callout"><strong>关键区别：</strong>改变模型后续看到的上下文，不等于删除原始事件；重建 Session，也不等于自动恢复文件系统或外部服务状态。</div>
+ <h3>用 Git 类比，但不要把它们画等号</h3>
+ <table><thead><tr><th>Git 概念</th><th>Agent / DSH 中相近的概念</th><th>区别</th></tr></thead><tbody>
+ <tr><td>提交历史</td><td>Session 事件历史</td><td>记录对象和语义不同；Session 事件不一定是代码版本。</td></tr>
+ <tr><td>创建分支</td><td>Session Fork</td><td>分支的是会话/执行历史视图，不必然复制工作区文件。</td></tr>
+ <tr><td>撤销工作区改动</td><td>Workspace Undo / Rollback</td><td>需要快照或文件变更记录支持。</td></tr>
+ <tr><td>回滚外部系统</td><td>补偿事务 / 外部撤销 API</td><td>通常不能靠 Session 回退完成。</td></tr>
+ </tbody></table>
+</section>
+
+<section id="scenario">
+ <h2>05 · 放进一个生产级研发 Agent 场景</h2>
+ <p>任务：开发订单系统的退款功能，并完成测试。Agent 运行环境包含订单服务、支付服务、代码分析工具和测试工具。</p>
+ <div class="timeline">
+  <div class="step"><strong>初始化插件能力</strong><p>加载订单、支付、代码分析等插件；各插件注册工具与服务，并建立清理路径。</p><span class="tag green">时间可组合</span></div>
+  <div class="step"><strong>解析依赖并激活任务 Agent</strong><p>退款 Agent 声明需要订单服务和支付服务。依赖满足后，在相应 Context 中运行。</p><span class="tag">空间可组合</span></div>
+  <div class="step"><strong>执行与记录</strong><p>Agent 分析需求、修改代码、运行测试；Session 记录交互和工具调用事件。</p><span class="tag">Session Event Log</span></div>
+  <div class="step"><strong>发现错误并重新尝试</strong><p>测试发现退款逻辑错误。可以从合适的 Session 历史节点 Fork；若文件修改需要撤销，则使用 Workspace 回退机制。</p><span class="tag amber">上下文 / 文件回退</span></div>
+  <div class="step"><strong>替换支付服务</strong><p>旧支付插件退出并清理注册；新实现进入后，依赖关系重新评估，满足条件的 Agent 可以继续运行。</p><span class="tag green">时间 + 空间可组合</span></div>
+ </div>
+ <div class="callout green"><strong>架构意义：</strong>系统不再假设运行环境在启动后保持不变，而是允许组件、依赖、上下文和任务分支在运行期间发生变化，并为这些变化建立管理规则。</div>
+</section>
+
+<section id="limits">
+ <h2>06 · 常见误区与能力边界</h2>
+ <table><thead><tr><th>容易误解成</th><th>更准确的理解</th></tr></thead><tbody>
+ <tr><td>时间可组合就是按时间安排 Agent 任务</td><td>重点是组件生命周期中的 Effect 如何建立与撤销。</td></tr>
+ <tr><td>空间可组合就是多机部署</td><td>重点是 Context 作用域、依赖声明和运行环境变化；不必然涉及物理空间。</td></tr>
+ <tr><td>依赖注入就是空间可组合的全部</td><td>依赖注入是重要部分；响应依赖变化、作用域与组件生命周期也很关键。</td></tr>
+ <tr><td>插件卸载就能撤销插件做过的一切</td><td>只能撤销被纳入管理且提供清理动作的副作用；外部操作不自动回滚。</td></tr>
+ <tr><td>Session 回退等于回滚代码</td><td>Session 管理历史/上下文；代码恢复需要 Workspace 快照、差异或版本控制。</td></tr>
+ <tr><td>Context 就是安全沙箱</td><td>Context 是运行时作用域，不应直接视为强安全隔离边界。</td></tr>
+ </tbody></table>
+ <div class="callout red"><strong>生产系统设计提醒：</strong>对文件、数据库和外部 API 等有持久影响的动作，必须明确记录边界、失败语义、幂等策略和补偿方案。不要把“可逆 Effect”误认为通用分布式事务。</div>
+</section>
+
+<section id="summary">
+ <h2>07 · 一页记住核心概念</h2>
+ <table><thead><tr><th>概念</th><th>要回答的问题</th><th>核心对象</th><th>主要价值</th></tr></thead><tbody>
+ <tr><td><strong>Temporal Composition</strong></td><td>什么时候进入、退出？</td><td>Effect / Disposer</td><td>动态加载、卸载、清理和热更新</td></tr>
+ <tr><td><strong>Spatial Composition</strong></td><td>在哪个环境运行、依赖什么？</td><td>Context / Dependencies</td><td>作用域组合、依赖解析、响应式激活</td></tr>
+ <tr><td><strong>Effect Rollback</strong></td><td>如何撤销运行时注册？</td><td>清理函数</td><td>避免插件残留</td></tr>
+ <tr><td><strong>Session Rollback</strong></td><td>如何回到另一条上下文路径？</td><td>事件历史 / Fork / Replay</td><td>重新探索执行路径</td></tr>
+ <tr><td><strong>Workspace Rollback</strong></td><td>如何撤销文件修改？</td><td>快照 / Diff / Undo</td><td>恢复工作区状态</td></tr>
+ </tbody></table>
+ <div class="callout"><strong>最终心智模型：</strong><br>时间可组合 = 管好组件的“进与退”；<br>空间可组合 = 管好组件的“依赖与环境”；<br>回退 = 明确要恢复的是运行时、会话上下文，还是工作区。</div>
+ <p class="small">阅读说明：本文是对相关架构概念的解释性整理。代码片段为概念示意，并非对所有 DSH / Cordis 版本 API 的逐字引用。具体 API、插件名称和实现细节应以所使用版本的源码与文档为准。</p>
+</section>
+<div class="footer">DSH Cordis 技术笔记 · 可离线阅读 · 支持浏览器打印为 PDF</div>
+</main>
+</body>
+</html>

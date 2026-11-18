@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型 Loop 架构：原理、训练与推理</title>
+<style>
+:root{
+  --bg:#f5f7fb;--paper:#fff;--ink:#172033;--muted:#65718a;--line:#e4e9f2;
+  --blue:#356ae6;--blue-soft:#edf3ff;--teal:#087f75;--teal-soft:#e9f7f5;
+  --amber:#a86608;--amber-soft:#fff5e5;--red:#b93838;--red-soft:#fff0f0;
+  --shadow:0 12px 32px rgba(25,42,75,.07);--radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.hero{background:linear-gradient(130deg,#101c3b 0%,#1e3d76 58%,#087f75 100%);color:#fff;padding:64px 24px 54px}
+.hero-inner,.layout{max-width:1120px;margin:auto}
+.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#b9d2ff;font-weight:700}
+h1{font-size:clamp(32px,5vw,52px);line-height:1.15;margin:16px 0}
+.hero p{max-width:780px;color:#dce7ff;font-size:18px;margin:0}
+.hero-tags{display:flex;gap:9px;flex-wrap:wrap;margin-top:26px}
+.hero-tags span{border:1px solid #ffffff40;background:#ffffff12;border-radius:999px;padding:5px 12px;font-size:13px}
+.layout{display:grid;grid-template-columns:235px minmax(0,1fr);gap:28px;padding:32px 20px 70px}
+nav{position:sticky;top:18px;align-self:start;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+nav strong{display:block;margin:0 0 10px;font-size:13px;color:var(--muted)}
+nav a{display:block;padding:7px 9px;border-radius:8px;color:#43506a;font-size:13px}
+nav a:hover{background:var(--blue-soft);text-decoration:none;color:var(--blue)}
+main{min-width:0}
+section{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:30px;margin-bottom:22px;box-shadow:var(--shadow);scroll-margin-top:20px}
+h2{font-size:25px;line-height:1.3;margin:0 0 18px}
+h3{font-size:18px;margin:25px 0 10px}
+p{margin:10px 0}
+.lead{font-size:17px;color:#35415a}
+.muted{color:var(--muted)}
+.small{font-size:13px;color:var(--muted)}
+.callout{border-left:4px solid var(--teal);background:var(--teal-soft);padding:15px 18px;border-radius:0 12px 12px 0;margin:18px 0}
+.warn{border-left-color:var(--amber);background:var(--amber-soft)}
+.danger{border-left-color:var(--red);background:var(--red-soft)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{border:1px solid var(--line);border-radius:14px;padding:17px;background:#fff}
+.card h3{margin:0 0 8px}
+.pill{display:inline-block;font-size:12px;padding:3px 9px;border-radius:999px;background:var(--blue-soft);color:var(--blue);font-weight:700}
+.pill.teal{background:var(--teal-soft);color:var(--teal)}
+.pill.amber{background:var(--amber-soft);color:var(--amber)}
+.diagram{border:1px solid var(--line);border-radius:15px;padding:18px;background:#fbfcff;margin:18px 0}
+.diagram-title{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px}
+.flow{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.block{padding:12px 15px;border-radius:10px;background:var(--blue-soft);border:1px solid #d7e3ff;text-align:center;min-width:100px;font-weight:650}
+.block.loop{background:var(--teal-soft);border-color:#bce5df;color:#075f58}
+.block.neutral{background:#f1f3f7;border-color:#e2e6ed;color:#43506a}
+.arrow{color:#8490a6;font-size:20px;font-weight:700}
+.loopbox{border:2px solid #65b8ad;border-radius:14px;padding:14px;background:#f4fbfa}
+.looplabel{text-align:center;color:var(--teal);font-weight:750;font-size:13px;margin-bottom:10px}
+.formula{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#f3f6fb;padding:14px 16px;border-radius:10px;overflow-x:auto;font-size:15px;margin:12px 0}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#f6f8fc;color:#44516a;font-weight:700}
+tr:last-child td{border-bottom:0}
+ul,ol{padding-left:22px}
+li{margin:6px 0}
+.metric{font-size:28px;font-weight:800;color:var(--teal);line-height:1.2}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.kpi .card{background:#fbfcff}
+details{border:1px solid var(--line);border-radius:12px;padding:13px 16px;margin:10px 0}
+summary{cursor:pointer;font-weight:700}
+footer{max-width:1120px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+button{border:1px solid #ffffff55;background:#ffffff16;color:white;border-radius:9px;padding:8px 13px;cursor:pointer;font-weight:650}
+button:hover{background:#ffffff2b}
+@media(max-width:850px){.layout{grid-template-columns:1fr}nav{position:relative;top:auto}.grid{grid-template-columns:1fr}.kpi{grid-template-columns:1fr}.hero{padding:45px 20px}}
+@media print{body{background:#fff}.hero{padding:28px;background:#18315d!important;print-color-adjust:exact}.layout{display:block;padding:15px}nav,.toolbar{display:none}section{box-shadow:none;break-inside:avoid;margin-bottom:14px}footer{padding-bottom:0}}
+</style>
+</head>
+<body>
+<header class="hero">
+ <div class="hero-inner">
+  <div class="eyebrow">MODEL ARCHITECTURE · LOOPED TRANSFORMER</div>
+  <h1>大模型 Loop 架构</h1>
+  <p>从参数共享、循环深度，到训练稳定性与推理效率。理解 Loop Transformer 为什么让同一组网络层反复计算，以及它带来的工程挑战。</p>
+  <div class="hero-tags"><span>循环式 Transformer</span><span>Recurrent Depth</span><span>训练与推理</span><span>架构设计</span></div>
+  <div class="toolbar"><button onclick="window.print()">打印 / 保存为 PDF</button><button onclick="document.querySelectorAll('details').forEach(x=>x.open=true)">展开全部问答</button></div>
+ </div>
+</header>
+<div class="layout">
+<nav>
+ <strong>本文导航</strong>
+ <a href="#definition">01 · Loop 是什么</a>
+ <a href="#mechanism">02 · 核心计算机制</a>
+ <a href="#patterns">03 · 哪些层进入 Loop</a>
+ <a href="#why">04 · 为什么可能有效</a>
+ <a href="#training">05 · 训练难点</a>
+ <a href="#inference">06 · 推理难点</a>
+ <a href="#research">07 · 相关研究方向</a>
+ <a href="#tradeoff">08 · 如何评价收益</a>
+ <a href="#glossary">09 · 术语与常见误区</a>
+</nav>
+<main>
+<section id="definition">
+ <span class="pill">01 · 概念</span>
+ <h2>Loop 模型究竟是什么？</h2>
+ <p class="lead"><b>Looped Transformer（循环式 Transformer）</b>是一类在网络内部重复使用同一组参数的架构。它不是 Agent 的工具调用循环，而是神经网络本身的计算结构发生了循环。</p>
+ <div class="callout"><b>一句话理解：</b>传统 Transformer 主要通过堆叠更多独立参数的层来增加网络深度；Loop 架构则尝试让一组 Transformer 层重复处理不断更新的隐藏状态，以较少的独立参数实现更深的有效计算。</div>
+ <div class="grid">
+  <div class="card">
+   <h3>传统 Transformer</h3>
+   <p>每一层通常有各自独立的参数。信息从浅层向深层单向传播。</p>
+   <div class="flow"><div class="block">Layer 1</div><span class="arrow">→</span><div class="block">Layer 2</div><span class="arrow">→</span><div class="block">Layer 3</div></div>
+   <p class="small">层数增加，通常意味着增加独立参数。</p>
+  </div>
+  <div class="card">
+   <h3>Loop Transformer</h3>
+   <p>选定一组层作为循环模块，后续轮次重复使用同一套权重。</p>
+   <div class="loopbox"><div class="looplabel">共享参数的 Loop Module</div><div class="flow"><div class="block loop">Block A</div><div class="block loop">Block B</div><div class="block loop">Block C</div></div><p style="text-align:center;color:var(--teal);font-weight:700;margin:10px 0 0">↻ 重复执行多轮</p></div>
+   <p class="small">参数不按循环轮次复制，但计算会重复发生。</p>
+  </div>
+ </div>
+ <p><b>必须区分：</b>Transformer 自回归生成时逐 Token 生成，也是一种迭代过程；但这里说的 Loop 是网络层/模块在隐藏状态空间中的重复计算，不等同于 Token-by-Token 解码，更不等同于 Agent Loop。</p>
+</section>
+
+<section id="mechanism">
+ <span class="pill">02 · 计算机制</span>
+ <h2>同一组层如何反复计算？</h2>
+ <p>设一个由若干 Transformer Block 组成的模块为 <code>Fθ</code>，其中 θ 表示这组模块的参数。每一轮都把上一轮的隐藏状态作为下一轮输入：</p>
+ <div class="formula">H₁ = Fθ(H₀)<br>H₂ = Fθ(H₁)<br>H₃ = Fθ(H₂)<br>……<br>Hₙ = Fθ(Hₙ₋₁)</div>
+ <p>也可以写成：</p><div class="formula">Hₜ₊₁ = Fθ(Hₜ)</div>
+ <p>关键在于：每一轮的 <b>参数 θ 相同</b>，但隐藏状态 Hₜ 不同。因此，同一个函数面对不同状态时，可以产生不同的计算结果。</p>
+ <div class="diagram">
+  <div class="diagram-title">示意：4 个 Block 执行 3 轮</div>
+  <div class="loopbox">
+   <div class="looplabel">同一组参数，循环复用</div>
+   <div class="flow"><div class="block loop">A</div><span class="arrow">→</span><div class="block loop">B</div><span class="arrow">→</span><div class="block loop">C</div><span class="arrow">→</span><div class="block loop">D</div></div>
+   <p style="text-align:center;color:var(--teal);font-weight:750">第 1 轮 → 第 2 轮 → 第 3 轮</p>
+  </div>
+  <p class="small">若每轮都完整执行 4 个 Block，3 轮对应 12 次 Block 执行；但独立参数仍是 A、B、C、D 这 4 组。</p>
+ </div>
+ <div class="callout warn"><b>参数量少，不等于计算量少。</b>循环 3 轮就要执行 3 轮的前向计算；若训练时完整反向传播，反向计算也要穿过这些循环步骤。</div>
+</section>
+
+<section id="patterns">
+ <span class="pill">03 · 架构形态</span>
+ <h2>一般是所有层循环，还是特定层循环？</h2>
+ <p>两种都可以。更准确地说，设计者先定义一个循环单元（Loop Module），再决定它覆盖哪些层、重复多少轮，以及是否动态决定退出。</p>
+ <div class="card">
+  <h3>形态 A：整个堆栈循环（Full-depth Loop）</h3>
+  <div class="flow"><div class="block neutral">输入</div><span class="arrow">→</span><div class="loopbox"><div class="looplabel">整段 Transformer 堆栈</div><div class="block loop">Layer 1 … Layer L</div><p style="text-align:center;color:var(--teal);margin:7px 0 0">↻ 重复 N 轮</p></div><span class="arrow">→</span><div class="block neutral">输出</div></div>
+  <p class="small">循环单元覆盖整个层堆栈；参数共享范围大，循环深度整体增加。</p>
+ </div>
+ <div class="card" style="margin-top:13px">
+  <h3>形态 B：只有中间一段循环（Partial-depth Loop）</h3>
+  <div class="flow"><div class="block">前段层<br><small>单次执行</small></div><span class="arrow">→</span><div class="loopbox"><div class="looplabel">循环模块</div><div class="block loop">中间若干层</div><p style="text-align:center;color:var(--teal);margin:7px 0 0">↻ 重复 N 轮</p></div><span class="arrow">→</span><div class="block">后段层<br><small>单次执行</small></div></div>
+  <p class="small">前后层保留非循环计算，中间层承担迭代精炼。它是一种可选设计，不应误认为所有 Loop 模型都采用这种切分。</p>
+ </div>
+ <div class="card" style="margin-top:13px">
+  <h3>形态 C：动态循环深度（Adaptive Loop）</h3>
+  <div class="flow"><div class="block">输入 / Token</div><span class="arrow">→</span><div class="block loop">Loop Module</div><span class="arrow">→</span><div class="block neutral">退出判断</div></div>
+  <div class="flow" style="margin-top:10px"><div class="block" style="border-color:#bce5df;background:var(--teal-soft)">简单样本：较少轮</div><div class="block" style="border-color:#f1d39e;background:var(--amber-soft)">复杂样本：较多轮</div></div>
+  <p class="small">不同输入或 Token 可以获得不同计算深度。动态路由、退出门控和批处理调度会增加系统复杂度。</p>
+ </div>
+ <table>
+  <thead><tr><th>形态</th><th>主要特点</th><th>主要挑战</th></tr></thead>
+  <tbody>
+   <tr><td>全堆栈循环</td><td>整个层堆栈共享并重复执行</td><td>循环稳定性、延迟</td></tr>
+   <tr><td>部分层循环</td><td>只让指定层区间重复执行</td><td>循环边界与模块设计</td></tr>
+   <tr><td>动态循环</td><td>根据输入/Token 分配循环次数</td><td>退出判断、负载不均、调度</td></tr>
+  </tbody>
+ </table>
+</section>
+
+<section id="why">
+ <span class="pill">04 · 能力机制</span>
+ <h2>为什么反复使用同一组参数，可能提升能力？</h2>
+ <p>因为参数共享并不意味着每一轮都在做完全相同的事。每轮输入的隐藏状态已经变化，模块面对的是不同的中间表示。</p>
+ <div class="diagram">
+  <div class="diagram-title">概念性示例：逐轮精炼隐藏表示</div>
+  <div class="flow"><div class="block neutral">H₀<br><small>初始表示</small></div><span class="arrow">→</span><div class="block loop">第 1 轮<br><small>Fθ(H₀)</small></div><span class="arrow">→</span><div class="block loop">第 2 轮<br><small>Fθ(H₁)</small></div><span class="arrow">→</span><div class="block loop">第 3 轮<br><small>Fθ(H₂)</small></div></div>
+  <p class="small">图中“初步理解、组合、修正”等只是帮助理解的直觉，不代表每一轮都具有固定、可解释的语义职责。</p>
+ </div>
+ <h3>与 Chain of Thought（CoT）的区别</h3>
+ <table>
+  <thead><tr><th>维度</th><th>显式 CoT</th><th>Loop 潜在迭代</th></tr></thead>
+  <tbody>
+   <tr><td>主要载体</td><td>生成出来的文字 Token</td><td>模型内部隐藏状态</td></tr>
+   <tr><td>迭代方式</td><td>继续生成推理文本</td><td>重复执行共享网络模块</td></tr>
+   <tr><td>可观察性</td><td>文字步骤可读，但不保证忠实反映内部过程</td><td>中间表示通常不直接可读</td></tr>
+   <tr><td>计算成本</td><td>增加生成 Token 与解码开销</td><td>增加循环模块的计算开销</td></tr>
+  </tbody>
+ </table>
+ <div class="callout"><b>重要：</b>Loop 与 CoT 并不互斥。一个模型可以在隐藏状态空间做循环计算，同时也可以生成显式推理文本。它们是不同层面的机制。</div>
+</section>
+
+<section id="training">
+ <span class="pill">05 · 训练阶段</span>
+ <h2>训练难点：让共享参数学会“多轮工作”</h2>
+ <p class="lead">训练的核心矛盾是：同一组参数需要适应不同循环轮次的隐藏状态分布，同时还要保证跨多轮反向传播稳定。</p>
+ <h3>1. 梯度跨轮累积与传播</h3>
+ <p>循环模块参数 θ 在每一轮都会参与计算，因此总梯度汇集了各轮对同一参数的贡献：</p>
+ <div class="formula">∂L/∂θ = Σₜ (各循环轮次对 θ 的梯度贡献)</div>
+ <p>各轮梯度可能相互增强，也可能方向冲突。循环次数增加，反向传播图也更长，训练显存与计算成本会上升。</p>
+ <h3>2. 梯度消失、爆炸与状态稳定性</h3>
+ <p>反向传播需要经过多轮状态变换的 Jacobian 连乘。若连乘整体放大，可能梯度爆炸；若整体缩小，可能梯度消失。</p>
+ <div class="grid">
+  <div class="card"><span class="pill" style="background:var(--red-soft);color:var(--red)">梯度爆炸</span><div class="metric" style="color:var(--red)">1 → 2 → 8 → 64</div><p class="small">示意：梯度幅度逐轮放大。</p></div>
+  <div class="card"><span class="pill amber">梯度消失</span><div class="metric" style="color:var(--amber)">1 → 0.5 → 0.25</div><p class="small">示意：梯度幅度逐轮衰减。</p></div>
+ </div>
+ <p>常见工程手段包括残差缩放、归一化、梯度裁剪、合理初始化、限制循环深度等。它们缓解问题，但不自动保证训练稳定。</p>
+ <h3>3. 参数共享冲突</h3>
+ <p>第一轮和后续轮次的隐藏状态分布可能不同；同一参数既要处理初始表示，也要处理已经多次变换的表示。不同轮次的梯度可能提出不同甚至冲突的更新方向。</p>
+ <p>可探索的设计包括循环轮次嵌入、条件调制、阶段控制信号，或在共享主干之外加入少量轮次专属参数。</p>
+ <h3>4. 训练目标：模型如何学会“何时、如何循环”？</h3>
+ <ul>
+  <li><b>只监督最后一轮：</b>目标简单，但中间轮次未必获得直接监督。</li>
+  <li><b>多轮辅助损失：</b>让中间状态也接受训练信号，但需要设计损失权重，避免目标冲突。</li>
+  <li><b>不同深度训练：</b>训练时随机采用不同循环次数，使模型适应多种计算深度。</li>
+  <li><b>退出门控训练：</b>若允许提前退出，还需要训练模型判断何时停止。</li>
+ </ul>
+ <h3>5. 参数效率不等于训练效率</h3>
+ <div class="callout warn">共享参数减少的是独立权重数量；如果总循环计算量相同，前向 FLOPs 不会凭空减少。完整反向传播还要保存或重算多轮中间激活。</div>
+ <table><thead><tr><th>成本项</th><th>Loop 的影响</th></tr></thead><tbody>
+  <tr><td>权重参数量</td><td>通常可因参数共享而减少</td></tr>
+  <tr><td>前向计算量</td><td>随循环轮数增加</td></tr>
+  <tr><td>反向传播</td><td>需要跨循环展开梯度路径</td></tr>
+  <tr><td>激活显存</td><td>可能随循环轮数增加；可用 checkpointing 以重计算换显存</td></tr>
+  <tr><td>训练并行性</td><td>循环轮次存在依赖，可能限制流水与并行效率</td></tr>
+ </tbody></table>
+</section>
+
+<section id="inference">
+ <span class="pill">06 · 推理阶段</span>
+ <h2>推理难点：计算深度增加，如何不拖垮服务效率？</h2>
+ <h3>1. 循环轮次存在串行依赖</h3>
+ <div class="formula">H₁ → H₂ → H₃ → … → Hₙ</div>
+ <p>第 t+1 轮依赖第 t 轮的隐藏状态，无法像互相独立的层或请求那样任意并行。循环次数越多，单次请求的关键路径通常越长。</p>
+ <h3>2. KV Cache 不能因参数共享就直接共享</h3>
+ <p>自回归 Attention 的 KV Cache 保存历史 Token 的 Key / Value。Loop 模型重复执行模块时，不同轮次的隐藏表示可能不同，因此对应的 K/V 也可能不同。</p>
+ <div class="callout danger"><b>核心辨析：</b>参数共享 ≠ KV Cache 共享。是否可以复用 KV，取决于模型具体的循环位置、Attention 定义、缓存语义和实现方式，不能仅凭“权重相同”推断。</div>
+ <p>若为不同循环轮次维护独立缓存，显存与读写开销可能较高；若设计缓存复用，则必须验证其数值正确性和效果损失。</p>
+ <h3>3. 动态退出与批处理不均衡</h3>
+ <p>动态循环可以让简单输入少算、复杂输入多算，但同一 Batch 内不同 Token 或请求可能在不同轮次退出。系统需要处理活动 Token 集合变化、张量压缩/重排、负载不均和调度开销。</p>
+ <div class="diagram">
+  <div class="diagram-title">一个 Batch 中的不同循环深度（示意）</div>
+  <div class="flow"><div class="block" style="background:var(--teal-soft);border-color:#bce5df">Token A<br>2 轮</div><div class="block" style="background:var(--amber-soft);border-color:#f1d39e">Token B<br>4 轮</div><div class="block" style="background:var(--blue-soft)">Token C<br>6 轮</div><div class="block" style="background:var(--red-soft);border-color:#f0caca">Token D<br>8 轮</div></div>
+  <p class="small">若采用整批同步执行，短任务可能等待长任务；若动态剔除已退出 Token，则会增加调度与内存管理复杂度。</p>
+ </div>
+ <h3>4. 延迟、吞吐量与显存之间的权衡</h3>
+ <table><thead><tr><th>指标</th><th>可能的变化</th><th>注意事项</th></tr></thead><tbody>
+  <tr><td>权重显存</td><td>可能降低</td><td>取决于共享比例及额外模块</td></tr>
+  <tr><td>单 Token FLOPs</td><td>通常随循环次数增加</td><td>要看实际执行轮数</td></tr>
+  <tr><td>单请求延迟</td><td>可能增加</td><td>循环有串行依赖</td></tr>
+  <tr><td>吞吐量</td><td>不确定</td><td>受批处理、调度和 GPU 利用率影响</td></tr>
+  <tr><td>KV Cache</td><td>不一定减少</td><td>需看缓存策略和循环结构</td></tr>
+ </tbody></table>
+</section>
+
+<section id="research">
+ <span class="pill">07 · 研究脉络</span>
+ <h2>相关研究方向与技术路线</h2>
+ <p>下面列出会话中讨论过的代表性名称和方向。不同论文对 Loop 的定义、训练方式和缓存策略可能不同；阅读时应以论文原文的架构图、训练配置和实验设置为准。</p>
+ <div class="card">
+  <h3>Universal Transformer</h3>
+  <p>较早探索在 Transformer 中引入循环/共享计算深度的代表性工作，为后续 recurrent-depth 思路提供了基础背景。</p>
+ </div>
+ <div class="card" style="margin-top:12px">
+  <h3>Ouro / LoopLM</h3>
+  <p>探索通过潜在空间中的迭代计算增强模型能力，并研究循环深度、训练策略和退出机制。阅读重点：循环单元如何定义、循环轮次如何训练、退出门控如何学习。</p>
+ </div>
+ <div class="card" style="margin-top:12px">
+  <h3>Mixture-of-Recursions</h3>
+  <p>把递归计算与路由结合，探索不同 Token 使用不同循环深度，以及与 KV 缓存管理相关的设计。阅读重点：Token 级深度分配、路由策略、缓存复用的适用条件。</p>
+ </div>
+ <div class="card" style="margin-top:12px">
+  <h3>LoopFold</h3>
+  <p>关注循环轮次串行依赖造成的推理延迟，探索预测后续状态、提前计算并修正的加速思路。阅读重点：预测误差、并行计算开销、端到端延迟收益。</p>
+ </div>
+ <div class="card" style="margin-top:12px">
+  <h3>训练稳定性与 Loop 转换</h3>
+  <p>相关工作还研究如何将已有 Dense Transformer 转换为循环模型，以及如何利用初始化、输入混合、辅助损失和退出门控稳定训练。</p>
+ </div>
+ <div class="callout warn"><b>阅读提醒：</b>论文中的参数规模、训练 Token 数、基准结果和延迟加速数字高度依赖实验设置。本整理不把会话中提到的具体数字作为普遍结论；正式引用时应回到论文核对模型版本、硬件、Batch、精度和比较基线。</div>
+</section>
+
+<section id="tradeoff">
+ <span class="pill">08 · 如何评价</span>
+ <h2>Loop 是否真的值得？不能只看参数量</h2>
+ <p>Loop 架构的核心假设是：共享参数的重复计算，可能以较少的独立参数实现有价值的额外计算深度。但这不自动意味着模型更强、更便宜或更快。</p>
+ <div class="kpi">
+  <div class="card"><div class="metric">参数</div><b>容量与存储</b><p class="small">权重数量、显存占用、模型部署成本。</p></div>
+  <div class="card"><div class="metric">FLOPs</div><b>计算预算</b><p class="small">前向/反向计算量、每 Token 实际循环轮数。</p></div>
+  <div class="card"><div class="metric">质量</div><b>任务效果</b><p class="small">推理、知识、代码、语言等任务是否都受益。</p></div>
+ </div>
+ <h3>公平比较至少要控制什么？</h3>
+ <ul>
+  <li><b>相同参数量：</b>比较参数效率，但计算量可能不同。</li>
+  <li><b>相同推理 FLOPs：</b>比较相同计算预算下的任务效果。</li>
+  <li><b>相同延迟或硬件预算：</b>比较实际服务价值。</li>
+  <li><b>相同训练数据与训练预算：</b>避免把数据量或训练计算差异误认为架构收益。</li>
+  <li><b>多任务评测：</b>不能只看数学推理；还要看知识、代码、指令遵循和泛化。</li>
+ </ul>
+ <div class="callout"><b>判断原则：</b>真正有价值的结果应证明 Loop 在明确的参数、FLOPs、延迟或训练预算约束下，带来了可复现的能力收益，而不是只证明“多循环一次，算得更多”。</div>
+</section>
+
+<section id="glossary">
+ <span class="pill">09 · 速查</span>
+ <h2>术语与常见误区</h2>
+ <table><thead><tr><th>术语</th><th>含义</th></tr></thead><tbody>
+  <tr><td>Looped Transformer</td><td>重复使用一组 Transformer 参数进行多轮计算的架构。</td></tr>
+  <tr><td>Recurrent Depth</td><td>通过循环执行增加有效计算深度。</td></tr>
+  <tr><td>Loop Module</td><td>被反复执行、共享参数的网络模块。</td></tr>
+  <tr><td>Hidden State</td><td>模型内部的隐藏表示；每轮循环后可能更新。</td></tr>
+  <tr><td>Adaptive Computation</td><td>根据输入或状态动态分配计算量。</td></tr>
+  <tr><td>Exit Gate</td><td>判断是否结束循环计算的门控机制。</td></tr>
+  <tr><td>KV Cache</td><td>自回归 Attention 中缓存历史 Key / Value 的机制。</td></tr>
+  <tr><td>Checkpointing</td><td>训练时以重计算换取较低激活显存的技术。</td></tr>
+ </tbody></table>
+ <h3>三个容易混淆的概念</h3>
+ <details><summary>Loop 模型是不是 Agent Loop？</summary><p>不是。Agent Loop 是模型与工具/环境之间的外部控制循环；Loop Transformer 是神经网络内部重复执行模块的计算架构。</p></details>
+ <details><summary>参数共享是不是计算量也减少？</summary><p>不一定。共享参数减少独立权重数量，但每多执行一轮仍然需要进行相应的计算。</p></details>
+ <details><summary>Loop 次数越多，模型一定越强吗？</summary><p>不一定。收益取决于循环结构、训练方式、任务和计算预算；过多循环可能带来边际收益下降、延迟增加，甚至任务表现退化。</p></details>
+ <details><summary>所有 Loop 模型都需要共享 KV Cache 吗？</summary><p>不是。权重共享和 KV Cache 共享是两个不同问题。缓存策略必须根据循环模块的 Attention 计算和状态语义单独设计。</p></details>
+ <div class="callout"><b>最终心智模型：</b>Loop 架构不是“把模型多跑几遍”这么简单，而是重新设计网络的参数复用方式、隐藏状态演化、训练梯度路径和推理调度机制。它试图在参数容量与计算深度之间建立新的权衡。</div>
+</section>
+</main>
+</div>
+<footer>整理说明：本文基于本次对话中关于大模型 Loop / Looped Transformer 的讨论重新组织，采用概念性示意图。具体论文结论与实验数字应以对应论文原文为准。</footer>
+</body>
+</html>
