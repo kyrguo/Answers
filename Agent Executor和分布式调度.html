@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent执行运行时与分布式计算：Google AX、华为Agent DX、Ray与元戎</title>
+<style>
+:root{
+  --bg:#f4f7fb;--paper:#fff;--ink:#182230;--muted:#5b6878;--line:#dfe6ef;
+  --blue:#2563eb;--blue-bg:#eff6ff;--green:#07845b;--green-bg:#ecfdf5;
+  --purple:#7546c8;--purple-bg:#f5f0ff;--amber:#a65d08;--amber-bg:#fff7e8;
+  --shadow:0 10px 30px rgba(22,39,64,.07);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.75}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:auto;padding:22px 24px 60px}
+.hero{background:linear-gradient(135deg,#10213d,#173f70 65%,#2465a7);color:#fff;border-radius:16px;padding:23px 30px;box-shadow:var(--shadow)}
+.eyebrow{font-size:11px;letter-spacing:.08em;color:#b9d7ff;font-weight:700}
+h1{font-size:clamp(24px,3vw,32px);line-height:1.25;margin:5px 0 8px;letter-spacing:-.025em}
+.hero p{max-width:900px;color:#e1ebf8;font-size:14px;margin:0}
+.hero-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.tag{font-size:11px;border:1px solid #ffffff45;border-radius:99px;padding:2px 9px;color:#e7f1ff}
+.layout{display:block;margin-top:14px}
+nav{position:static;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:14px 0 20px;box-shadow:none;display:flex;align-items:center;gap:5px 8px;flex-wrap:wrap}
+nav strong{font-size:13px;margin:0 8px 0 0;color:#344256}
+nav a{display:inline-block;padding:4px 8px;border-radius:7px;color:#46566a;font-size:12px;white-space:nowrap}
+nav a:hover{background:var(--blue-bg);text-decoration:none;color:var(--blue)}
+main{min-width:0}
+section{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:30px;margin-bottom:22px;box-shadow:var(--shadow)}
+h2{font-size:25px;line-height:1.3;margin:0 0 18px;letter-spacing:-.02em}
+h3{font-size:18px;margin:26px 0 10px}
+h4{font-size:15px;margin:0 0 7px}
+p{margin:10px 0}
+.lead{font-size:17px;color:#334155}
+.muted{color:var(--muted)}
+.callout{border-left:4px solid var(--blue);background:var(--blue-bg);padding:15px 18px;border-radius:0 12px 12px 0;margin:18px 0}
+.callout.green{border-color:var(--green);background:var(--green-bg)}
+.callout.amber{border-color:#e09a24;background:var(--amber-bg)}
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:16px 0}
+.card{border:1px solid var(--line);border-radius:13px;padding:17px;background:#fff}
+.card.blue{background:var(--blue-bg);border-color:#cfe0ff}
+.card.green{background:var(--green-bg);border-color:#c8efdf}
+.card.purple{background:var(--purple-bg);border-color:#e1d4ff}
+.card.amber{background:var(--amber-bg);border-color:#f5dfb8}
+.card p{font-size:14px;color:#526174;margin:5px 0 0}
+.kicker{font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:700;color:var(--muted)}
+.diagram{border:1px solid var(--line);border-radius:15px;padding:20px;background:#fbfdff;margin:18px 0}
+.layer{border:1px solid var(--line);border-radius:11px;padding:15px;text-align:center;margin:9px auto;max-width:760px;background:#fff}
+.layer strong{display:block}
+.layer small{display:block;color:var(--muted);margin-top:3px}
+.layer.blue{background:var(--blue-bg);border-color:#bcd4ff}
+.layer.green{background:var(--green-bg);border-color:#b8e8d4}
+.layer.purple{background:var(--purple-bg);border-color:#d9c9ff}
+.layer.gray{background:#f1f4f8}
+.arrow{text-align:center;color:#8492a5;font-size:22px;line-height:1.1}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.two .layer{width:100%;margin:0}
+table{width:100%;border-collapse:collapse;margin:15px 0;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:11px 12px;text-align:left;vertical-align:top}
+th{background:#f5f8fc;color:#344256;font-weight:700}
+tr:last-child td{border-bottom:0}
+ul,ol{padding-left:22px}
+li{margin:6px 0}
+.pill{display:inline-block;font-size:11px;font-weight:700;border-radius:99px;padding:3px 9px;background:#eaf1ff;color:#2358b4;margin-right:5px}
+.flow{counter-reset:step;display:grid;gap:10px;margin:18px 0}
+.step{display:grid;grid-template-columns:38px 1fr;gap:12px;align-items:start}
+.step:before{counter-increment:step;content:counter(step);width:32px;height:32px;border-radius:50%;background:var(--blue-bg);color:var(--blue);font-weight:800;display:grid;place-items:center}
+.step div{border:1px solid var(--line);border-radius:11px;padding:11px 14px}
+.step p{font-size:13px;color:var(--muted);margin:3px 0 0}
+code{background:#f0f3f8;padding:2px 5px;border-radius:5px;font-size:.92em}
+pre{overflow:auto;background:#101827;color:#e6edf7;border-radius:12px;padding:17px;font-size:13px;line-height:1.55}
+.refs{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin-top:22px}
+.footer{text-align:center;color:#7a8797;font-size:12px;padding:18px}
+@media(max-width:850px){.cards{grid-template-columns:1fr}.wrap{padding:14px 13px 40px}.hero{padding:20px 18px}section{padding:22px 18px}.two{grid-template-columns:1fr}nav{gap:4px}nav strong{width:100%;margin-bottom:3px}}
+@media print{body{background:#fff}.wrap{max-width:none;padding:0}.hero,section,nav{box-shadow:none}.layout{display:block}.hero{border-radius:0}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">技术架构解读</div>
+  <h1>Agent执行运行时与分布式计算</h1>
+  <p>Google Agent Executor、华为 Agent DX，以及 Ray 与 openYuanrong 的技术分层和架构关系。</p>
+  <div class="hero-tags">
+    <span class="tag">Agent执行运行时</span><span class="tag">持久化执行</span><span class="tag">分布式计算</span>
+  </div>
+</header>
+
+<div class="layout">
+<nav>
+  <strong>目录</strong>
+  <a href="#summary">核心结论</a>
+  <a href="#google">一、Google Agent Executor</a>
+  <a href="#durable">二、Durable Execution</a>
+  <a href="#huaweidx">三、华为 Agent DX</a>
+  <a href="#ray">四、openYuanrong 与 Ray</a>
+  <a href="#relationship">五、Executor 与 Ray 的关系</a>
+  <a href="#stack">六、统一技术分层</a>
+  <a href="#why">七、为什么需要 Agent 专用执行层</a>
+  <a href="#future">八、架构趋势与判断</a>
+  <a href="#sources">参考资料</a>
+</nav>
+
+<main>
+<section id="summary">
+  <h2>核心结论先行</h2>
+  <p class="lead">这几个项目并不是简单的竞品关系。它们处在相邻但不同的抽象层：通用分布式计算引擎负责“算力如何分布式运行”，Agent Executor 负责“一个 Agent 如何作为长期、可恢复的逻辑执行实体运行”。</p>
+  <div class="cards">
+    <div class="card blue"><div class="kicker">Google</div><h3>Agent Executor（AX）</h3><p>Agent 专用执行运行时。重点是持久化执行、会话一致性、故障恢复、轨迹分支和安全隔离。</p></div>
+    <div class="card green"><div class="kicker">Huawei</div><h3>Agent DX</h3><p>Agent 分布式执行底座。重点是 Environment / Runtime 的创建、调度、路由、隔离、生命周期和恢复。</p></div>
+    <div class="card purple"><div class="kicker">General compute</div><h3>Ray</h3><p>通用分布式计算框架。以 Task、Actor、Object 等抽象承载分布式 AI 与 Python 工作负载。</p></div>
+    <div class="card amber"><div class="kicker">General compute</div><h3>openYuanrong</h3><p>通用 Serverless 分布式计算引擎。强调多语言运行时、动态调度、细粒度弹性和分布式数据系统。</p></div>
+  </div>
+  <div class="callout green"><strong>一句话概括：</strong>Ray / openYuanrong 解决分布式计算基础问题；Google AX / 华为 Agent DX 则把 Agent 的长生命周期、状态恢复、隔离和执行环境管理提升为运行时原生能力。</div>
+</section>
+
+<section id="google">
+  <h2>一、Google Agent Executor 究竟是什么？</h2>
+  <p>Google Agent Executor（AX）被定位为面向 Agent 执行、恢复和分布式部署的开放运行时。它关注的不是 Agent 如何思考，而是 Agent 的执行如何在复杂基础设施条件下可靠地持续运行。</p>
+  <p>传统 Agent 通常由一个进程承载执行循环、上下文和工具调用状态。任务一旦持续数小时、跨越人工审批、网络中断或机器故障，应用就必须自行处理大量恢复逻辑。AX 试图把这些能力沉淀到 Runtime。</p>
+
+  <h3>典型场景：长时间运行的 Coding Agent</h3>
+  <div class="flow">
+    <div class="step"><div><strong>接收任务并分析代码仓库</strong><p>模型推理、读取文件、理解项目结构。</p></div></div>
+    <div class="step"><div><strong>创建沙箱并执行代码</strong><p>安装依赖、修改文件、运行测试。</p></div></div>
+    <div class="step"><div><strong>等待外部事件</strong><p>等待测试结果、用户反馈或人工审批，可能持续很久。</p></div></div>
+    <div class="step"><div><strong>恢复并继续执行</strong><p>从已保存的状态继续，而不是从头开始。</p></div></div>
+    <div class="step"><div><strong>提交结果或创建执行分支</strong><p>可以沿原路径继续，也可以从某个检查点探索其他方案。</p></div></div>
+  </div>
+
+  <h3>AX 关注的关键能力</h3>
+  <table>
+    <thead><tr><th>能力</th><th>含义</th><th>解决的问题</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Durable Execution</strong></td><td>持久化执行状态与事件</td><td>进程或节点故障后，任务仍可恢复</td></tr>
+      <tr><td><strong>Secure Isolation</strong></td><td>隔离 Agent、工具和执行环境</td><td>降低不可信代码、多租户执行的风险</td></tr>
+      <tr><td><strong>Session Consistency</strong></td><td>维护会话状态写入一致性</td><td>避免多个执行者并发修改同一 Session</td></tr>
+      <tr><td><strong>Connection Recovery</strong></td><td>断线后按事件位置重新连接</td><td>客户端连接中断不意味着任务丢失</td></tr>
+      <tr><td><strong>Trajectory Branching</strong></td><td>从 Checkpoint 派生执行轨迹</td><td>复用已有进度，尝试不同执行路径</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><strong>关键理解：</strong>AX 不只是“把 Agent 分发到多台机器执行”。它更重要的价值，是把 Agent 执行过程变成可记录、可恢复、可管理的运行时对象。</div>
+</section>
+
+<section id="durable">
+  <h2>二、为什么 Durable Execution 是核心？</h2>
+  <p>Durable Execution 可以理解为：程序的执行进度不再只存在于进程内存中，而是通过事件日志、快照等机制持久化。进程退出后，运行时可以根据持久化信息重建执行状态。</p>
+
+  <div class="two">
+    <div class="card">
+      <h4>传统执行方式</h4>
+      <div class="layer gray"><strong>Agent Process</strong><small>上下文、工具状态和执行进度主要在内存中</small></div>
+      <div class="arrow">↓</div>
+      <div class="layer gray"><strong>模型 → 工具 → 结果 → 下一步</strong></div>
+      <div class="arrow">↓</div>
+      <div class="layer" style="background:#fff0f0;border-color:#f3c7c7"><strong>进程崩溃</strong><small>状态丢失，应用需要自行补救</small></div>
+    </div>
+    <div class="card">
+      <h4>持久化执行方式</h4>
+      <div class="layer blue"><strong>Agent / Tool / Skill / Sandbox</strong><small>逻辑执行单元</small></div>
+      <div class="arrow">↓</div>
+      <div class="two">
+        <div class="layer green"><strong>Event Log</strong><small>记录发生了什么</small></div>
+        <div class="layer green"><strong>Snapshot</strong><small>保存某时刻状态</small></div>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="layer blue"><strong>Recovery</strong><small>恢复状态并继续执行</small></div>
+    </div>
+  </div>
+
+  <h3>三个概念要分清</h3>
+  <ul>
+    <li><strong>Event Log：</strong>记录执行过程中发生的事件，例如工具调用开始、工具结果返回、审批通过等。</li>
+    <li><strong>Snapshot：</strong>保存某个时点的状态，避免每次恢复都从最早事件开始重放。</li>
+    <li><strong>Recovery：</strong>读取快照并应用后续事件，重建可继续执行的状态。</li>
+  </ul>
+  <div class="callout amber"><strong>容易被低估的难点：</strong>恢复 Agent 不等于重新调用一次 LLM。必须判断工具调用是否已经成功、外部副作用是否发生、重试是否会造成重复操作。这涉及幂等性、事件确认和状态一致性。</div>
+  <p>因此，Durable Execution 与数据库领域的 Event Sourcing、Checkpoint / Recovery 有相通之处，但 Agent 场景还要额外处理模型调用和外部工具的非确定性、副作用与长时间等待。</p>
+</section>
+
+<section id="huaweidx">
+  <h2>三、华为 Agent DX 是不是同一类东西？</h2>
+  <p>华为 openJiuwen 生态中的 Agent DX（Agent Distributed eXecutor）与 Google AX 属于同一大方向：都试图为 Agent 提供专用的分布式执行基础设施。但二者公开架构的侧重点不同。</p>
+  <div class="callout green"><strong>核心定位：</strong>Agent Framework 负责 Agent 的业务逻辑与思考过程；Agent DX 负责 Agent 执行环境的创建、调度、路由、隔离和生命周期管理。</div>
+
+  <h3>Agent DX 的职责拆分</h3>
+  <table>
+    <thead><tr><th>组件 / 概念</th><th>主要职责</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Agent Template / Binding</strong></td><td>定义 Agent 模板，以及模板与运行实例之间的绑定关系。</td></tr>
+      <tr><td><strong>Environment</strong></td><td>描述 Agent 所需的执行环境，是环境管理的重要抽象。</td></tr>
+      <tr><td><strong>Coordinator / Scheduler</strong></td><td>协调请求、分配资源、选择执行位置。</td></tr>
+      <tr><td><strong>sandboxd</strong></td><td>创建和管理隔离执行环境，承接沙箱相关能力。</td></tr>
+      <tr><td><strong>Execd</strong></td><td>在执行环境内提供命令、文件、终端、端口等操作能力。</td></tr>
+      <tr><td><strong>Checkpoint / Shared Storage</strong></td><td>保存恢复所需状态，并支持跨节点恢复。</td></tr>
+    </tbody>
+  </table>
+
+  <h3>一个 Agent 执行代码时，Agent DX 做什么？</h3>
+  <div class="flow">
+    <div class="step"><div><strong>Agent Framework 决定执行代码</strong><p>例如模型生成了一段 Python 代码，需要调用工具运行。</p></div></div>
+    <div class="step"><div><strong>Agent DX 接收环境请求</strong><p>通过 Environment API / SDK 请求创建或使用执行环境。</p></div></div>
+    <div class="step"><div><strong>调度器选择计算节点</strong><p>根据资源与环境状态，选择合适的执行位置。</p></div></div>
+    <div class="step"><div><strong>sandboxd 创建隔离环境</strong><p>准备沙箱，Execd 在其中执行命令。</p></div></div>
+    <div class="step"><div><strong>运行时管理状态和生命周期</strong><p>处理请求路由、环境状态、暂停与恢复等。</p></div></div>
+  </div>
+
+  <h3>Google AX 与华为 Agent DX 对比</h3>
+  <table>
+    <thead><tr><th>维度</th><th>Google Agent Executor</th><th>Huawei Agent DX</th></tr></thead>
+    <tbody>
+      <tr><td>主要抽象</td><td>执行事件、Session、Snapshot、Actor</td><td>Environment、Runtime、Assignment</td></tr>
+      <tr><td>突出重点</td><td>持久化执行、执行轨迹恢复与一致性</td><td>执行环境管理、调度、路由与生命周期</td></tr>
+      <tr><td>状态管理</td><td>Event Log、Snapshot</td><td>Environment 状态、Checkpoint</td></tr>
+      <tr><td>一致性关注</td><td>Single-writer 会话一致性</td><td>版本化所有权、Generation fencing 等机制</td></tr>
+      <tr><td>隔离方式</td><td>Agent / 工具 / 沙箱隔离</td><td>sandboxd 等隔离执行后端</td></tr>
+      <tr><td>适合关注的问题</td><td>“执行到一半崩溃，怎样从进度继续？”</td><td>“怎样为 Agent 创建、调度并管理隔离环境？”</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">上述对比描述的是公开架构的重心，不意味着两者能力边界完全互斥。两边都涉及执行环境、Checkpoint 和恢复。</p>
+  <p>版本演进方面，早期 Agent DX 资料更强调通过 openYuanrong 的 meta_service 注册 Agent、通过 frontend 调用 Agent；当前项目主线则呈现出 Coordinator、Environment、sandboxd、Execd 等更完整的分布式执行平台结构。分析时应以对应版本的仓库和文档为准。</p>
+</section>
+
+<section id="ray">
+  <h2>四、openYuanrong 与 Ray 是同类东西吗？</h2>
+  <p>基本可以归为同一大类：通用分布式计算运行时 / 框架。它们提供编程抽象、分布式调度和数据共享能力，让原本在单机执行的程序能够扩展到集群。</p>
+  <div class="cards">
+    <div class="card green">
+      <h3>openYuanrong</h3>
+      <p>华为开源的 Serverless 分布式计算引擎，强调多语言运行时、函数级弹性、动态调度和分布式数据系统。</p>
+      <p><a href="https://www.openyuanrong.org/" target="_blank" rel="noopener">项目官网 ↗</a></p>
+    </div>
+    <div class="card purple">
+      <h3>Ray</h3>
+      <p>开源分布式计算框架，面向 Python 与 AI 工作负载，提供 Task、Actor、Object 等编程抽象。</p>
+      <p><a href="https://docs.ray.io/" target="_blank" rel="noopener">官方文档 ↗</a></p>
+    </div>
+  </div>
+  <h3>核心能力对照</h3>
+  <table>
+    <thead><tr><th>能力</th><th>解决的问题</th><th>Ray 中的典型抽象</th><th>openYuanrong 的相关方向</th></tr></thead>
+    <tbody>
+      <tr><td>编程抽象</td><td>如何描述分布式工作单元</td><td>Task、Actor</td><td>Function、State、Data Object、Data Flow</td></tr>
+      <tr><td>调度</td><td>把工作分配到哪个节点</td><td>Ray Scheduler</td><td>函数系统与动态调度</td></tr>
+      <tr><td>数据共享</td><td>不同节点如何交换数据</td><td>Object、Object Store</td><td>Object、Stream、KV 等数据系统</td></tr>
+      <tr><td>资源管理</td><td>如何使用 CPU、GPU、内存等资源</td><td>资源声明与集群调度</td><td>细粒度资源调度与弹性伸缩</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><strong>不要把“同类”理解成“完全等价”。</strong>Ray 的生态和 Python AI 工作负载支持非常成熟；openYuanrong 更强调多语言函数运行时、Serverless 化和通算智算融合。具体能力需要按版本、部署形态和生态成熟度逐项比较。</div>
+</section>
+
+<section id="relationship">
+  <h2>五、Agent Executor 与 Ray 到底是什么关系？</h2>
+  <p class="lead">最关键的区分是：Ray 主要回答“计算如何分布式运行”；Agent Executor 主要回答“Agent 作为一个长期逻辑执行实体，如何被创建、暂停、恢复、隔离和管理”。</p>
+  <h3>一个 Ray Actor 有状态，但不等于完整的 Durable Execution</h3>
+  <p>例如，Ray Actor 可以在内存中维护 Agent 的对话历史、运行变量和中间结果：</p>
+  <pre><code>class Agent:
+    def __init__(self):
+        self.history = []
+
+    def execute(self, task):
+        self.history.append(task)</code></pre>
+  <p>这说明 Actor 可以有状态，但如果承载 Actor 的节点宕机，系统还需要回答更多问题：</p>
+  <ul>
+    <li>Actor 的状态是否有持久化副本？如何恢复？</li>
+    <li>执行进度具体到了哪一步？</li>
+    <li>上一次工具调用是否已经成功？</li>
+    <li>重试会不会重复扣款、发邮件或修改外部系统？</li>
+    <li>如果 Agent 正在等待人工审批，如何跨进程、跨节点继续？</li>
+  </ul>
+  <p>这些不是“有 Actor”就自动具备的能力。需要专门的持久化执行协议、事件记录、Checkpoint、幂等控制和恢复机制。</p>
+
+  <h3>Google 的 AX 与 Agent Substrate：两个相邻层次</h3>
+  <p>Google 公开介绍中还提出了 Agent Substrate。它与 AX 的关系，有助于理解 Agent Runtime 和计算基础设施之间的边界。</p>
+  <div class="diagram">
+    <div class="layer blue"><strong>Agent / Harness / Skills / Tools</strong><small>LangGraph、ADK、自定义 Agent 等</small></div>
+    <div class="arrow">↓</div>
+    <div class="layer purple"><strong>Agent Executor（AX）</strong><small>执行语义、持久化执行、Session 一致性、Checkpoint / Recovery、轨迹分支</small></div>
+    <div class="arrow">↓</div>
+    <div class="layer green"><strong>Agent Substrate</strong><small>Agent 优先的计算基础设施：Worker Pool、Sandbox、资源弹性与执行环境管理</small></div>
+    <div class="arrow">↓</div>
+    <div class="layer gray"><strong>Kubernetes / 计算节点</strong><small>CPU、Memory、GPU、网络与存储等基础资源</small></div>
+  </div>
+  <p><strong>可以这样理解：</strong></p>
+  <ul>
+    <li><strong>Agent Executor：</strong>关心 Agent 执行过程的语义与可靠性。</li>
+    <li><strong>Agent Substrate：</strong>关心 Agent 在哪里运行、使用什么资源、如何获得隔离环境。</li>
+    <li><strong>Kubernetes：</strong>提供更底层的容器编排和集群基础设施。</li>
+  </ul>
+  <p>因此，AX 并不等于 Ray，也不意味着 AX 必须运行在 Ray 之上。Google 的公开路线是 AX 与 Agent Substrate 配合，由后者提供面向 Agent 的计算基础设施。</p>
+</section>
+
+<section id="stack">
+  <h2>六、把 Google、华为、Ray 放在一张技术分层图里</h2>
+  <p>下面按职责归类。它是概念层次图，不代表所有项目之间存在直接依赖关系。</p>
+  <div class="diagram">
+    <div class="layer gray"><strong>Agent 应用与 Harness 层</strong><small>ADK / LangGraph / openJiuwen / 自研 Agent</small></div>
+    <div class="arrow">↓</div>
+    <div class="two">
+      <div class="layer blue"><strong>Google Agent Executor</strong><small>持久执行、轨迹恢复、会话一致性</small></div>
+      <div class="layer green"><strong>Huawei Agent DX</strong><small>Environment、调度、路由、沙箱与恢复</small></div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="layer purple"><strong>Agent 计算环境 / 执行后端</strong><small>Google Agent Substrate；华为 sandboxd / Jiuwenbox 等执行后端</small></div>
+    <div class="arrow">↓</div>
+    <div class="two">
+      <div class="layer green"><strong>openYuanrong</strong><small>通用 Serverless 分布式计算</small></div>
+      <div class="layer blue"><strong>Ray</strong><small>通用分布式计算框架</small></div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="layer gray"><strong>基础设施层</strong><small>Kubernetes / Linux / CPU / GPU / 网络 / 存储</small></div>
+  </div>
+  <div class="callout amber"><strong>架构边界提醒：</strong>图中的上下层是职责上的抽象关系，不表示 Google AX 必须通过 Ray 执行，也不表示华为 Agent DX 必须依赖 openYuanrong。具体能否组合，要看执行后端接口、状态协议和调度集成方式。</div>
+</section>
+
+<section id="why">
+  <h2>七、为什么需要 Agent 专用执行层？Ray / openYuanrong 不够吗？</h2>
+  <p>Agent 正在成为一种不同于传统在线服务和批处理任务的计算负载。</p>
+  <table>
+    <thead><tr><th>传统负载</th><th>典型特征</th><th>Agent 负载的不同之处</th></tr></thead>
+    <tbody>
+      <tr><td>在线服务</td><td>进程长期运行，持续处理请求</td><td>Agent 的一次任务可能跨越很长时间，期间多次等待外部事件</td></tr>
+      <tr><td>批处理任务</td><td>提交、执行、结束，输入输出相对明确</td><td>Agent 执行路径动态变化，可能反复规划、调用工具和请求人工决策</td></tr>
+      <tr><td>普通 Actor</td><td>持有状态并处理消息</td><td>Agent 还需要执行轨迹、外部副作用、会话一致性和可恢复语义</td></tr>
+    </tbody>
+  </table>
+  <h3>Agent 生命周期示意</h3>
+  <div class="flow">
+    <div class="step"><div><strong>启动</strong><p>创建 Agent 实例，加载上下文、工具和运行配置。</p></div></div>
+    <div class="step"><div><strong>思考与执行</strong><p>调用模型、执行工具、产生中间状态。</p></div></div>
+    <div class="step"><div><strong>等待</strong><p>等待用户、外部 API、审批或异步事件，可能持续数小时。</p></div></div>
+    <div class="step"><div><strong>恢复</strong><p>重新加载状态，继续之前的任务。</p></div></div>
+    <div class="step"><div><strong>继续或分支</strong><p>沿原路径继续，或基于 Checkpoint 探索不同路径。</p></div></div>
+    <div class="step"><div><strong>休眠或结束</strong><p>释放计算资源，保留必要状态，等待后续唤醒或完成清理。</p></div></div>
+  </div>
+  <h3>Agent-Native Runtime 要解决的资源问题</h3>
+  <p>Agent 可能大部分时间处于等待状态，真正消耗 CPU 的时间只占一小部分。如果一个 Agent 长期绑定完整容器，资源利用率可能很低。因此新一代执行基础设施会重点考虑：</p>
+  <ul>
+    <li><strong>计算与状态分离：</strong>Agent 不活跃时释放计算资源，保留逻辑状态。</li>
+    <li><strong>快速唤醒：</strong>新事件到来时，尽快恢复到可执行状态。</li>
+    <li><strong>细粒度隔离：</strong>不同用户、不同 Agent 的执行环境相互隔离。</li>
+    <li><strong>状态可迁移：</strong>Agent 能够在不同计算节点间恢复或迁移。</li>
+    <li><strong>执行可恢复：</strong>节点故障或网络中断不应导致长任务必然从头开始。</li>
+  </ul>
+  <div class="callout green"><strong>架构演进方向：</strong><br>从“一个 Agent = 一个长期运行的进程 / 容器”，走向“一个 Agent = 一个可持久化、可暂停、可恢复、可迁移的逻辑执行实体”。计算资源成为它按需占用的执行载体。</div>
+</section>
+
+<section id="future">
+  <h2>八、架构趋势与最终判断</h2>
+  <h3>未来可能形成的三层结构</h3>
+  <table>
+    <thead><tr><th>层次</th><th>主要职责</th><th>代表项目</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Agent Harness / Framework</strong></td><td>Agent 如何思考、规划、调用工具</td><td>ADK、LangGraph、openJiuwen</td></tr>
+      <tr><td><strong>Agent Execution Runtime</strong></td><td>Agent 如何持久执行、暂停、恢复、隔离、管理会话</td><td>Google AX、Huawei Agent DX</td></tr>
+      <tr><td><strong>Distributed Compute Runtime</strong></td><td>如何提供分布式算力、资源调度和数据传输</td><td>Ray、openYuanrong</td></tr>
+    </tbody>
+  </table>
+
+  <h3>趋势一：Agent Runtime 从 Framework 中独立出来</h3>
+  <p>过去 Agent Framework 往往把执行循环、状态管理、工具调用和运行环境放在一起。未来企业可能运行多种 Agent Framework，但统一交给一个 Agent Execution Runtime 管理。这样更换 LangGraph、ADK 或其他 Harness 时，不必重建整套执行基础设施。</p>
+
+  <h3>趋势二：通用分布式计算平台增加 Agent 专用能力</h3>
+  <p>Ray 和 openYuanrong 不需要重新发明通用分布式计算系统，而可以在已有能力上增加 Agent Session 管理、Durable Execution、Checkpoint / Recovery、Sandbox 隔离、Agent 级资源调度，以及计算与状态分离。</p>
+
+  <h3>一个值得深入研究的架构问题：状态应该由谁管理？</h3>
+  <div class="cards">
+    <div class="card blue">
+      <h4>路线 A：Agent Executor 管理状态</h4>
+      <p>底层计算引擎保持通用。Agent Runtime 通过 Event Log、Snapshot、Checkpoint 等机制实现恢复。优势是层次清晰、后端可替换；代价是状态协议和执行语义需要在 Runtime 层实现。</p>
+    </div>
+    <div class="card green">
+      <h4>路线 B：底层计算引擎深度管理状态</h4>
+      <p>把 Actor 生命周期、内存数据、调度和状态迁移更紧密地结合。潜在优势是减少跨层开销、提升资源利用效率；代价是计算引擎与 Agent 语义耦合更深。</p>
+    </div>
+  </div>
+  <p>两条路线并非完全对立，也可能形成混合架构。关键在于状态所有权、持久化边界、故障恢复协议和外部副作用的处理方式。</p>
+
+  <div class="callout green">
+    <strong>对华为路线的判断</strong><br>
+    openYuanrong 已具备函数生命周期管理、休眠唤醒、跨节点迁移和分布式数据系统等基础能力。若能将这些通用 Serverless 执行能力，与 Agent DX 的 Environment、Agent 生命周期和恢复语义深度结合，就有机会形成真正的 Agent-Native Runtime。其价值不只是给 Agent 套一层分布式调度 API，而是把 Agent 的逻辑生命周期与底层计算资源管理协同起来。
+  </div>
+</section>
+
+<section id="sources">
+  <h2>参考资料与延伸阅读</h2>
+  <ol>
+    <li><a href="https://github.com/google/ax" target="_blank" rel="noopener">Google AX — GitHub</a>：Agent Executor 项目代码、架构与实现说明。</li>
+    <li><a href="https://cloud.google.com/blog/products/ai-machine-learning/agent-executor-googles-distributed-agent-runtime" target="_blank" rel="noopener">Google Cloud Blog — Agent Executor</a>：Google 对分布式 Agent Runtime 的官方介绍。</li>
+    <li><a href="https://github.com/openJiuwen-ai/agent-dx" target="_blank" rel="noopener">Huawei openJiuwen Agent DX — GitHub</a>：Agent DX 的当前代码与架构说明。</li>
+    <li><a href="https://docs.openyuanrong.org/" target="_blank" rel="noopener">openYuanrong 文档</a>：分布式函数、运行时和数据系统相关资料。</li>
+    <li><a href="https://www.openyuanrong.org/" target="_blank" rel="noopener">openYuanrong 官网</a>：项目定位和技术介绍。</li>
+    <li><a href="https://docs.ray.io/" target="_blank" rel="noopener">Ray 官方文档</a>：Task、Actor、Object、调度与集群运行机制。</li>
+  </ol>
+  <p class="muted">说明：本文按项目公开资料进行架构层面的归纳。项目仍在演进，具体 API、组件名称、部署依赖和能力边界应以对应版本的官方仓库及文档为准。尤其要区分概念上的职责映射与真实的产品依赖关系。</p>
+</section>
+<div class="footer">Agent Infrastructure Architecture Briefing · 中文技术解读</div>
+</main>
+</div>
+</div>
+</body>
+</html>
